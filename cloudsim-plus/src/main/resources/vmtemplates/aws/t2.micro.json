@@ -1,0 +1,6 @@
+{
+  "name": "t2.micro",
+  "cpus":1,
+  "memoryInMB":1024,
+  "pricePerHour":0.017
+}
