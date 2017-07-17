@@ -11,6 +11,7 @@ import org.cloudbus.cloudsim.datacenters.Datacenter;
 import org.cloudbus.cloudsim.datacenters.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.datacenters.DatacenterCharacteristicsSimple;
 import org.cloudbus.cloudsim.datacenters.DatacenterSimple;
+import org.cloudbus.cloudsim.distributions.ExponentialDistr;
 import org.cloudbus.cloudsim.hosts.Host;
 import org.cloudbus.cloudsim.hosts.HostSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
@@ -455,8 +456,9 @@ public class Simulation1 {
             //create cloudlets
             for (int j = 0; j < nofCloudletsToCreate; j++) {
                 //randomize length
-                r = new Random();
-                cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                //r = new Random();
+                //cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                cloudletLength = (long) new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN).sample(); //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
                 if (cloudletLength <= 0) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
@@ -480,8 +482,9 @@ public class Simulation1 {
             nofCloudletsToCreate = (int) Math.round(((MIN_CLOUDLETS_PERDELAY/2) * (Math.sin(secs*Math.PI/(SAMPLING_INTERVAL/2))+1)) + (MAX_CLOUDLETS_PERDELAY - MIN_CLOUDLETS_PERDELAY));
             for (int j = 0; j < nofCloudletsToCreate; j++) {
                 //randomize length
-                r = new Random();
-                cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                //r = new Random();
+                //cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                cloudletLength = (long) new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN).sample();
                 if (cloudletLength <= 0) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
@@ -508,8 +511,9 @@ public class Simulation1 {
             //create cloudlets
             for (int j = 0; j < nofCloudletsToCreate; j++) {
                 //randomize length
-                r = new Random();
-                cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                //r = new Random();
+                //cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                cloudletLength = (long) new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN).sample();
                 if (cloudletLength <= 0) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
@@ -533,8 +537,10 @@ public class Simulation1 {
         for (secs = 0; secs < TIME_TO_FINISH_SIMULATION; secs++) {
             nofCloudletsToCreate = CONSTANT_TO_CREATE;
             for (int j = 0; j < nofCloudletsToCreate; j++) {
-                r = new Random();
-                cloudletLength = (long) r.nextGaussian() * CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION + CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                //r = new Random();
+                //cloudletLength = (long) r.nextGaussian() * CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION + CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                cloudletLength = (long) new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN).sample();
+                Log.printFormatted("Cloudlet length: " + cloudletLength + "\n");
                 if (cloudletLength <= 0) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }

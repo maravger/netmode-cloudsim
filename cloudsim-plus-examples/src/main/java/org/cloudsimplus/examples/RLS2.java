@@ -31,16 +31,16 @@ public class RLS2 {
 //        double[] theta = compute(rm.getColumn(1), rm.getColumn(2));
 //        System.out.println(Arrays.toString(theta));
 
-        double data1[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm0@2017.07.12.17.16.24.csv", true);
-        double data2[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm1@2017.07.12.17.16.24.csv", true);
+        double data1[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm0@2017.07.13.15.03.50.csv", true);
+        double data2[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm1@2017.07.13.15.03.50.csv", true);
         RealMatrix rm = new Array2DRowRealMatrix(data1);
         RealMatrix rm2 = new Array2DRowRealMatrix(data2);
-        //double[] x = rm.getColumn(1);
-        double[][] x = {rm.getColumn(1),rm2.getColumn(1)};
-        double[][] u = {rm.getColumn(3),rm2.getColumn(3)};
-//        double[][] u = {rm.getColumn(3),rm.getColumn(6)};
+        double[] x = rm.getColumn(1);
+//        double[][] x = {rm.getColumn(1),rm2.getColumn(1)};
+//        double[][] u = {rm.getColumn(3),rm2.getColumn(3)};
+        double[][] u = {rm.getColumn(3),rm.getColumn(6)};
 //        double[] u = rm.getColumn(3);
-        //System.out.println("BFR: " + computebfr(x, rm2.getColumn(1), u) + "%");
+        System.out.println("BFR: " + computebfr(x, rm.getColumn(1), u) + "%");
        // System.out.println(Arrays.toString(compute(x, u)));
 //        checkIfWorkingDecoupled(10000);
     }
@@ -233,8 +233,10 @@ public class RLS2 {
         X[0] = x;
         X[1] = x_hat;
         createMixedPlot(X, "Xs", "Seconds");
-        System.out.println("X2^ = " + Arrays.toString(x2_hat));
         System.out.println("X2  = " + Arrays.toString(x2));
+        System.out.println("X2^ = " + Arrays.toString(x2_hat));
+        System.out.println("U0  = " + Arrays.toString(u[0]));
+        System.out.println("U1  = " + Arrays.toString(u[1]));
         return bfr(x2, x2_hat);
     }
 
@@ -245,9 +247,30 @@ public class RLS2 {
 
         num = arrayMean(arrayEachSquared(rx.subtract(rx_hat).getColumn(0)));
         den = arrayMean(arrayEachSquared(arrayEachSubtract(x, arrayMean(x))));
+//        LOGS
+//        System.out.println("X");
+//        print2dMatrix(rx);
+//        System.out.println("X_HAT");
+//        print2dMatrix(rx_hat);
+//        System.out.println("X-X_HAT");
+//        System.out.println(Arrays.toString(rx.subtract(rx_hat).getColumn(0)));
+//        System.out.println("(X-X_HAT)^2");
+//        System.out.println(arrayEachSquared(rx.subtract(rx_hat).getColumn(0)));
+//        System.out.println("E((X-X_HAT)^2)");
+//        System.out.println(num);
+//        System.out.println("X_MEAN");
+//        System.out.println( arrayMean(x));
+//        System.out.println("X-X_MEAN");
+//        System.out.println(arrayEachSubtract(x, arrayMean(x)));
+//        System.out.println("(X-X_MEAN)^2");
+//        System.out.println(arrayEachSquared(arrayEachSubtract(x, arrayMean(x))));
+//        System.out.println("E((X-X_MEAN)^2)");
+//        System.out.println(den);
 
         System.out.println("Num " + Math.round(num*1000.0)/1000.0);
         System.out.println("Den " + Math.round(den*1000.0)/1000.0);
+//        System.out.println("SQRT = " + Math.sqrt(num/den));
+
 
         result = 1 - Math.sqrt(num/den);
 
