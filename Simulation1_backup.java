@@ -6,7 +6,6 @@ import org.cloudbus.cloudsim.brokers.DatacenterBrokerSimple;
 import org.cloudbus.cloudsim.cloudlets.Cloudlet;
 import org.cloudbus.cloudsim.cloudlets.CloudletSimple;
 import org.cloudbus.cloudsim.core.CloudSim;
-import org.cloudbus.cloudsim.core.Simulation;
 import org.cloudbus.cloudsim.core.events.SimEvent;
 import org.cloudbus.cloudsim.datacenters.Datacenter;
 import org.cloudbus.cloudsim.datacenters.DatacenterCharacteristics;
@@ -28,8 +27,6 @@ import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelFull;
 import org.cloudbus.cloudsim.vms.Vm;
 import org.cloudbus.cloudsim.vms.VmSimple;
 import org.cloudsimplus.builders.tables.CloudletsTableBuilder;
-import org.cloudsimplus.listeners.CloudletEventInfo;
-import org.cloudsimplus.listeners.CloudletVmEventInfo;
 import org.cloudsimplus.listeners.EventInfo;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
@@ -54,25 +51,24 @@ public class Simulation1 {
     private static final List<XYSeries> ART90_SERIES_LIST = new ArrayList<XYSeries>();
     private static final List<XYSeries> REQUESTS_SUBMITTED_PERSEC = new ArrayList<XYSeries>();
 
-    private static final int TIME_TO_FINISH_SIMULATION = 3000;
+    private static final int TIME_TO_FINISH_SIMULATION = 6000;
     private static final int SCHEDULING_INTERVAL = 1; // The interval in which the Datacenter will schedule events.
-    //private static final double SCHEDULING_INTERVAL = 0.1; //for more precise scheduling interval; not sure if working tbh
+    //private static final double SCHEDULING_INTERVAL = 0.5; //for more precise scheduling interval; not sure if working tbh
     private static final int SAMPLING_INTERVAL = 30; // The interval in which the Datacenter will schedule events.
     private static final int HOSTS = 1;
 
     private static final int MIN_CLOUDLETS_PERDELAY = 1;
     private static final int MAX_CLOUDLETS_PERDELAY = 4;
-//    private static final int CONSTANT_TO_CREATE = (int)((MAX_CLOUDLETS_PERDELAY+MIN_CLOUDLETS_PERDELAY)/4);
-    private static final int CONSTANT_TO_CREATE = 1;
+    private static final int CONSTANT_TO_CREATE = 1; //(int)((MAX_CLOUDLETS_PERDELAY+MIN_CLOUDLETS_PERDELAY)/4);
     private static final int HOST_PES = 100;
     private static final int HOST_PES_MIPS_CAPACITY = 2000;
     private static final int HOST_RAM = 512000; //in MB
     private static final int HOST_STORAGE = 10000000; //in MB
     private static final int HOST_BW = 100000; //in Megabits/s
     private static final int VMS = 1;
-    private static final int VM_PES = 20; //initial
+    private static final int VM_PES = 50; //initial
     private static final int VM_MIPS_CAPACITY = 2000;
-    private static final int VM_RAM = (int) (0.02*HOST_RAM); //in MB, initial
+    private static final int VM_RAM = (int) (0.1*HOST_RAM); //in MB, initial
     //private static final int VM_RAM = 100000; //in MB, initial
     private static final int VM_STORAGE = 10000; //in MB
     private static final int VM_BW = 1000;
@@ -82,7 +78,7 @@ public class Simulation1 {
     private static final double VM_RAM_UPPER_BOUND = 89.1; //percentage
     private static final int MAX_TOTAL_VM_PES = 90;
     private static final double MAX_VM_RAM = 0.9; //percentage
-    //private static final int CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION = 2000;
+    private static final int CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION = 2000;
     private static final int CLOUDLET_LENGTH_DESIRED_MEAN = 6000;
     private static final int CLOUDLET_PES_LOWER_BOUND = 1;
     private static final int CLOUDLET_PES_UPPER_BOUND = 3;
@@ -116,7 +112,6 @@ public class Simulation1 {
     private double[] globaltotalCpuPercentUse;
     private double[] totalRamPercentUse;
     private double totalHostRamPercentUse;
-    private double totalHowManyFinished;
     private double[] globaltotalRamPercentUse;
     private double[] totalTime;
 
@@ -189,7 +184,7 @@ public class Simulation1 {
         String[] csvFiles = new String[VMS];
         String timeStamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
         for (int vmIndex = 0; vmIndex < VMS; vmIndex++) {
-            csvFiles[vmIndex] = "/Users/avgr_m/Desktop/CSVs/Vm" + vmIndex + "_@" + timeStamp + "_" + TIME_TO_FINISH_SIMULATION/SAMPLING_INTERVAL + "Samples" + ".csv";
+            csvFiles[vmIndex] = "D:/dimit/ntua/FOG-MEC/percom/data/Vm" + vmIndex + "_@" + timeStamp + "_" + TIME_TO_FINISH_SIMULATION/SAMPLING_INTERVAL + "Samples" + ".csv";
             writers[vmIndex] = new FileWriter(csvFiles[vmIndex]);
             CSVUtils.writeLine(writers[vmIndex], Arrays.asList("Time", "ART", "ART90", "CPUutil", "PES", "RAMutil", "RAM", "ReqsSubmitted", "ReqsFinished", "HostCPUutil", "HostRAMutil"));
         }
@@ -226,21 +221,20 @@ public class Simulation1 {
 
         //simulation init config
         simulation = new CloudSim();
-        this.simulation.addOnClockTickListener(this::onClockTickCollectListener);
-        //bypass pause listeners
-        //simulation.addOnEventProcessingListener(simEvent -> pauseSimulationAtSpecificTime(simEvent));
-//        simulation.addOnSimulationPausedListener(pauseInfo -> {
-//            try {
-//                printCloudletsFinishedInIntervalAndResumeSimulation(pauseInfo);
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//        });
-        this.simulation.terminateAt(TIME_TO_FINISH_SIMULATION);
+        simulation.addOnClockTickListener(this::onClockTickCollectListener);
+        simulation.addOnEventProcessingListener(simEvent -> pauseSimulationAtSpecificTime(simEvent));
+        simulation.addOnSimulationPausedListener(pauseInfo -> {
+            try {
+                printCloudletsFinishedInIntervalAndResumeSimulation(pauseInfo);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+        simulation.terminateAt(TIME_TO_FINISH_SIMULATION);
 
         //create entities
         createDatacenter();
-        broker0 = new DatacenterBrokerSimple(this.simulation);
+        broker0 = new DatacenterBrokerSimple(simulation);
         vmList.addAll(createListOfScalableVms(VMS));
         //createUniformCloudletArrival();
         //createSinusoidCloudletArrival();
@@ -259,7 +253,7 @@ public class Simulation1 {
         }
 
         //simulation start & measure execution time
-        this.simulation.start();
+        simulation.start();
 
         long estimatedTime = System.currentTimeMillis() - startTime;
         long second = (estimatedTime / 1000) % 60;
@@ -274,30 +268,20 @@ public class Simulation1 {
             writers[i].flush();
             writers[i].close();
         }
-        Log.printFormatted("TOTAL FINISHED " + (int)totalHowManyFinished);
-        //printSimulationResults();
     }
 
-    private void onClockTickCollectListener(EventInfo eventInfo){
+    private void onClockTickCollectListener(EventInfo eventInfo) {
         //Sum for every tick
         //Log.printFormattedLine("#Tick at %.2f second\n", eventInfo.getTime());
         ticks++;
-//        Log.printFormattedLine("Tick Time " + eventInfo.getTime());
         globalTicks++;
         for (int i = 0; i < vmList.size(); i++) {
             Vm vm = vmList.get(i);
-            //Log.printFormattedLine("Current CPU " + vm.getCpuPercentUsage() * 100.0 + "\n");
+            //Log.printFormattedLine("Current CPU" + vm.getCpuPercentUsage() * 100.0);
             totalCpuPercentUse[i] += vm.getCpuPercentUsage() * 100.0;
             globaltotalCpuPercentUse[i] += vm.getCpuPercentUsage() * 100.0;
             totalRamPercentUse[i] += vm.getRam().getPercentUtilization() * 100;
             globaltotalRamPercentUse[i] += vm.getRam().getPercentUtilization() * 100;
-        }
-
-        //added when bypassed pauseListener
-        if(((int)eventInfo.getTime() % SAMPLING_INTERVAL == 0) && (int)eventInfo.getTime() != 0 && (int)eventInfo.getTime() != previousBrake){
-            previousBrake = (int)eventInfo.getTime(); // Duplicate pauses bug fix
-            //Log.printFormattedLine("\n#Simulation paused at %.2f second", eventInfo.getTime());
-            scaleResourcesInInterval(eventInfo);
         }
     }
 
@@ -314,7 +298,7 @@ public class Simulation1 {
         simulation.resume();
     }
 
-    private void scaleResourcesInInterval(EventInfo pauseInfo){
+    private void scaleResourcesInInterval(EventInfo pauseInfo) throws IOException {
         double totalPesAllocated = 0.0;
         double totalRamAllocated = 0.0;
         int howManyFinished[] = new int[VMS];
@@ -328,8 +312,8 @@ public class Simulation1 {
         Arrays.fill(averageRamUsage, 0.0);
         Arrays.fill(averageResponseTime, 0.0);
 
-//        Log.printFormatted("Current Interval Finished: " + currentIntervalFinishedCloudlets.size() + "\n");
-//        Log.printFormatted("Sum Finished: " + broker0.getCloudletFinishedList().size() + "\n");
+        //Log.printFormatted("Current Interval Finished: " + currentIntervalFinishedCloudlets.size() + "\n");
+        //Log.printFormatted("Sum Finished: " + broker0.getCloudletFinishedList().size() + "\n");
         for(Cloudlet cloudlet : currentIntervalFinishedCloudlets){
             vmIndex = cloudlet.getVm().getId();
             howManyFinished[vmIndex]++; //tracks how many cloudlets finished for each vm
@@ -337,8 +321,6 @@ public class Simulation1 {
             totalCpuTime[vmIndex] += cloudlet.getActualCpuTime(); //Returns the total execution time of the Cloudlet in seconds.
             globaltotalCpuTime[vmIndex] += cloudlet.getActualCpuTime();
             n90thPercentile[vmIndex].add(cloudlet.getActualCpuTime());
-            //Log.printFormatted("Finish Time: " + cloudlet.getActualCpuTime() + "\n");
-            //Log.printFormatted("Finish Time: " + cloudlet.getVm().getCloudletScheduler().getCloudletFinishedList().get(vmIndex).getFinishTime() + "\n");
         }
         //Log.printFormatted("How Many After " + howManyFinished[1] + "\n");
 
@@ -396,7 +378,6 @@ public class Simulation1 {
             double art90 = get90thPercentile(n90thPercentile[vmIndex]);
 
             printLogAndCsV(pauseInfo, prevIntervalPes, prevIntervalRam, howManyFinished, vm.getId(), vmIndex, art90);
-            totalHowManyFinished += howManyFinished[vmIndex];
         }
         //Truncate Accumulators
         for (List<Double> sublist: n90thPercentile) {
@@ -410,7 +391,7 @@ public class Simulation1 {
         intervalCount++;
     }
 
-    private void printLogAndCsV(EventInfo pauseInfo, long prevIntervalPes[], long prevIntervalRam[], int howManyFinished[], int id, int vmIndex, double art90){
+    private void printLogAndCsV(EventInfo pauseInfo, long prevIntervalPes[], long prevIntervalRam[], int howManyFinished[], int id, int vmIndex, double art90) throws IOException {
 
         CPU_SERIES_LIST.get(vmIndex).add(pauseInfo.getTime(),averageCpuUsage[vmIndex]);
         RAM_SERIES_LIST.get(vmIndex).add(pauseInfo.getTime(),averageRamUsage[vmIndex]);
@@ -419,24 +400,20 @@ public class Simulation1 {
         REQUESTS_SUBMITTED_PERSEC.get(vmIndex).add(pauseInfo.getTime(),howManySubmitted[vmIndex][intervalCount]*1.0/SAMPLING_INTERVAL);
 
 
-        try {
-            CSVUtils.writeLine(writers[vmIndex], Arrays.asList(
-                String.valueOf(Math.round(pauseInfo.getTime() * 100.0) / 100.0),
-                String.valueOf(Math.round(averageResponseTime[vmIndex] * 100.0) / 100.0),
-                String.valueOf(Math.round(art90 * 100.0) / 100.0),
-                String.valueOf(Math.round(averageCpuUsage[vmIndex] * 100.0 / 100.0) / 100.0),
-                String.valueOf(Math.round((int)prevIntervalPes[vmIndex] * 100.0 / 100.0) / 100.0),
-                String.valueOf(Math.round(averageRamUsage[vmIndex] * 100.0 / 100.0) / 100.0),
-                String.valueOf((int)prevIntervalRam[vmIndex]),
-                String.valueOf(Math.round(howManySubmitted[vmIndex][intervalCount] * 100.0 /SAMPLING_INTERVAL) / 100.0),
-                String.valueOf(howManyFinished[vmIndex]),
-                String.valueOf(Math.round(averageHostCpuUsage * 100.0 / 100.0) / 100.0),
-                String.valueOf(Math.round(averageHostRamUsage * 100.0 / 100.0) / 100.0)
-                )
-            );
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        CSVUtils.writeLine(writers[vmIndex], Arrays.asList(
+            String.valueOf(Math.round(pauseInfo.getTime() * 100.0) / 100.0),
+            String.valueOf(Math.round(averageResponseTime[vmIndex] * 100.0) / 100.0),
+            String.valueOf(Math.round(art90 * 100.0) / 100.0),
+            String.valueOf(Math.round(averageCpuUsage[vmIndex] * 100.0 / 100.0) / 100.0),
+            String.valueOf(Math.round((int)prevIntervalPes[vmIndex] * 100.0 / 100.0) / 100.0),
+            String.valueOf(Math.round(averageRamUsage[vmIndex] * 100.0 / 100.0) / 100.0),
+            String.valueOf((int)prevIntervalRam[vmIndex]),
+            String.valueOf(Math.round(howManySubmitted[vmIndex][intervalCount] * 100.0 /SAMPLING_INTERVAL) / 100.0),
+            String.valueOf(howManyFinished[vmIndex]),
+            String.valueOf(Math.round(averageHostCpuUsage * 100.0 / 100.0) / 100.0),
+            String.valueOf(Math.round(averageHostRamUsage * 100.0 / 100.0) / 100.0)
+            )
+        );
 
         Log.printFormatted("\t\tTime %6.1f: | Vm %d | Average Interval CPU Usage: %6.2f%% | Average Interval Ram Usage: %6.2f%% " +
                 "| Average Interval Response Time: %6.2f s | 90th Percentile Interval Response Time: %6.2f s  | PEs allocated: %d | RAM allocated: %dmb | Requests Submitted: %d | Requests Finished: %d" +
@@ -457,15 +434,12 @@ public class Simulation1 {
     }
 
     private void printSimulationResults() {
-        List<Cloudlet> finishedCloudlets = broker0.getCloudletFinishedList();
+        //List<Cloudlet> finishedCloudlets = broker0.getCloudletsFinishedList();
         //append last stray finished cloudlets
-//        finishedCloudletsAcu.addAll(broker0.getCloudletFinishedList());
-//        List<Cloudlet> finishedCloudlets = finishedCloudletsAcu;
-//        Comparator<Cloudlet> sortByVmId = comparingDouble(c -> c.getVm().getId());
-//        Comparator<Cloudlet> sortByStartTime = comparingDouble(c -> c.getExecStartTime());
-        Comparator<Cloudlet> sortByVmId = comparingDouble(c -> c.getFinishTime());
-        Comparator<Cloudlet> sortByStartTime = comparingDouble(c -> c.getActualCpuTime());
-//        finishedCloudlets.sort(sortByVmId.thenComparing(sortByStartTime));
+        finishedCloudletsAcu.addAll(broker0.getCloudletFinishedList());
+        List<Cloudlet> finishedCloudlets = finishedCloudletsAcu;
+        Comparator<Cloudlet> sortByVmId = comparingDouble(c -> c.getVm().getId());
+        Comparator<Cloudlet> sortByStartTime = comparingDouble(c -> c.getExecStartTime());
         finishedCloudlets.sort(sortByVmId.thenComparing(sortByStartTime));
         new CloudletsTableBuilder(finishedCloudlets).build();
     }
@@ -474,7 +448,6 @@ public class Simulation1 {
         int cloudletPes, nofCloudletsToCreate, totalCloudletsCreated = 0;
         long cloudletLength;
         Random r;
-        ExponentialDistr exp = new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN);
         int secs = 0;
         //Creates a List of Cloudlets that will start running immediately when the simulation starts
         while (secs<TIME_TO_FINISH_SIMULATION) {
@@ -485,7 +458,7 @@ public class Simulation1 {
                 //randomize length
                 //r = new Random();
                 //cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
-                cloudletLength = (long)exp.sample(); //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
+                cloudletLength = (long) new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN).sample(); //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
                 if (cloudletLength <= 0) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
@@ -503,8 +476,8 @@ public class Simulation1 {
     private void createSinusoidCloudletArrival() {
         int cloudletPes, nofCloudletsToCreate, totalCloudletsCreated = 0;
         long cloudletLength;
-        Random r;
         ExponentialDistr exp = new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN);
+        Random r;
         int secs = 0;
         while (secs<TIME_TO_FINISH_SIMULATION) {
             nofCloudletsToCreate = (int) Math.round(((MIN_CLOUDLETS_PERDELAY/2) * (Math.sin(secs*Math.PI/(SAMPLING_INTERVAL/2))+1)) + (MAX_CLOUDLETS_PERDELAY - MIN_CLOUDLETS_PERDELAY));
@@ -512,7 +485,7 @@ public class Simulation1 {
                 //randomize length
                 //r = new Random();
                 //cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
-                cloudletLength = (long)exp.sample();
+                cloudletLength = (long) exp.sample();
                 if (cloudletLength <= 0) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
@@ -530,8 +503,8 @@ public class Simulation1 {
     private void createPoissonCloudletArrival() {
         int cloudletPes, nofCloudletsToCreate, totalCloudletsCreated = 0;
         long cloudletLength;
-        Random r;
         ExponentialDistr exp = new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN);
+        Random r;
         int secs = 0;
         //Creates a List of Cloudlets that will start running immediately when the simulation starts
         while (secs<TIME_TO_FINISH_SIMULATION) {
@@ -560,8 +533,8 @@ public class Simulation1 {
     private void createConstantCloudletArrival() {
         int cloudletPes, nofCloudletsToCreate, totalCloudletsCreated = 0;
         long cloudletLength;
-        Random r;
         ExponentialDistr exp = new ExponentialDistr(CLOUDLET_LENGTH_DESIRED_MEAN);
+        Random r;
         int secs = 0;
         //constant
         for (secs = 0; secs < TIME_TO_FINISH_SIMULATION; secs++) {
@@ -569,8 +542,8 @@ public class Simulation1 {
             for (int j = 0; j < nofCloudletsToCreate; j++) {
                 //r = new Random();
                 //cloudletLength = (long) r.nextGaussian() * CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION + CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
-                cloudletLength = (long)exp.sample();
-                //Log.printFormatted("Cloudlet length: " + cloudletLength + "\n");
+                cloudletLength = (long) exp.sample();
+                Log.printFormatted("Cloudlet length: " + cloudletLength + "\n");
                 if (cloudletLength <= 0) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
@@ -635,7 +608,7 @@ public class Simulation1 {
         //randomly selects a length for the cloudlet
         UtilizationModelDynamic ramModel = new UtilizationModelDynamic(UtilizationModel.Unit.ABSOLUTE, 200);
         ramModel
-            .setMaxResourceUtilization(100)
+            .setMaxResourceUtilization(500)
             .setUtilizationUpdateFunction(this::utilizationIncrement);
         UtilizationModel utilizationFull = new UtilizationModelFull();
         Cloudlet cl = new CloudletSimple(id, length, numberOfPes);
@@ -646,13 +619,7 @@ public class Simulation1 {
             .setUtilizationModelRam(ramModel)
             .setBroker(broker0)
             .setSubmissionDelay(delay);
-//        cl.setExecStartTime(System.currentTimeMillis() + delay*100);
-//        System.out.println("SET Start Time = " + System.currentTimeMillis());
         return cl;
-    }
-
-    private void onFinishRealTimeListener (CloudletVmEventInfo cl) {
-
     }
 
     private static int getPoisson(double lambda) {
@@ -669,24 +636,23 @@ public class Simulation1 {
     }
 
     public static double get90thPercentile(List<Double> input) {
-//        System.out.println("Before Sorting:");
+        double value;
+        //        System.out.println("Before Sorting:");
 //        for(double counter: input){
 //            System.out.println(counter);
 //        }
         Collections.sort(input);
-//        System.out.println("How Many finished: " + input.size());
 //        System.out.println("After Sorting:");
 //        for(double counter: input){
 //            System.out.println(counter);
 //        }
         int size = input.size();
-        int pos = (int)Math.round(0.9*size)-1;
-        double value;
-        if (pos>0) {
-            value = input.get(pos);
+        int index = (int)Math.round(0.9*size)-1;
+        if (index < 0) {
+            value = 0;
         }
         else {
-            value = 0;
+            value = input.get(index);
         }
 //        System.out.println("Position:");
 //        System.out.println((int)Math.round(0.9*size));

@@ -11,6 +11,7 @@ import org.cloudbus.cloudsim.brokers.DatacenterBroker;
 import org.cloudbus.cloudsim.core.Simulation;
 import org.cloudbus.cloudsim.core.UniquelyIdentificable;
 import org.cloudbus.cloudsim.datacenters.Datacenter;
+import org.cloudbus.cloudsim.util.Log;
 import org.cloudbus.cloudsim.utilizationmodels.UtilizationModel;
 import org.cloudbus.cloudsim.vms.Vm;
 import org.cloudsimplus.listeners.CloudletVmEventInfo;
@@ -428,6 +429,10 @@ public abstract class CloudletAbstract implements Cloudlet {
 
         if (newStatus == Status.SUCCESS) {
             setFinishTime(getSimulation().clock());
+//            System.out.println("Start Time = " + getExecStartTime());
+//            System.out.println("Time Assigned  = " + System.currentTimeMillis());
+//            System.out.println("Exec Time  = " + (System.currentTimeMillis() - getExecStartTime()));
+//            setFinishTime(System.currentTimeMillis());
         }
 
         write("Sets Cloudlet status from %s to %s", status.name(), newStatus.name());
