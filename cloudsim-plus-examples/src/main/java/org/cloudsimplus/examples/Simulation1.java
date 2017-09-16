@@ -1,5 +1,6 @@
 package org.cloudsimplus.examples;
 
+import org.cloudbus.cloudsim.allocationpolicies.VmAllocationPolicyAbstract;
 import org.cloudbus.cloudsim.allocationpolicies.VmAllocationPolicySimple;
 import org.cloudbus.cloudsim.brokers.DatacenterBroker;
 import org.cloudbus.cloudsim.brokers.DatacenterBrokerSimple;
@@ -19,6 +20,7 @@ import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.ResourceProvisionerSimple;
 import org.cloudbus.cloudsim.resources.Pe;
 import org.cloudbus.cloudsim.resources.PeSimple;
+import org.cloudbus.cloudsim.resources.Processor;
 import org.cloudbus.cloudsim.schedulers.cloudlet.CloudletSchedulerTimeShared;
 import org.cloudbus.cloudsim.schedulers.vm.VmSchedulerTimeShared;
 import org.cloudbus.cloudsim.util.Log;
@@ -27,6 +29,9 @@ import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelDynamic;
 import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelFull;
 import org.cloudbus.cloudsim.vms.Vm;
 import org.cloudbus.cloudsim.vms.VmSimple;
+import org.cloudsimplus.autoscaling.VerticalVmScaling;
+import org.cloudsimplus.autoscaling.VerticalVmScalingSimple;
+import org.cloudsimplus.autoscaling.resources.ResourceScalingInstantaneous;
 import org.cloudsimplus.builders.tables.CloudletsTableBuilder;
 import org.cloudsimplus.listeners.CloudletEventInfo;
 import org.cloudsimplus.listeners.CloudletVmEventInfo;
@@ -60,19 +65,19 @@ public class Simulation1 {
     private static final int SAMPLING_INTERVAL = 30; // The interval in which the Datacenter will schedule events.
     private static final int HOSTS = 1;
 
-    private static final int MIN_CLOUDLETS_PERDELAY = 1;
-    private static final int MAX_CLOUDLETS_PERDELAY = 4;
-//    private static final int CONSTANT_TO_CREATE = (int)((MAX_CLOUDLETS_PERDELAY+MIN_CLOUDLETS_PERDELAY)/4);
-    private static final int CONSTANT_TO_CREATE = 1;
+    private static final int MIN_CLOUDLETS_PERDELAY = 2;
+    private static final int MAX_CLOUDLETS_PERDELAY =10;
+    //    private static final int CONSTANT_TO_CREATE = (int)((MAX_CLOUDLETS_PERDELAY+MIN_CLOUDLETS_PERDELAY)/4);
+    private static final int CONSTANT_TO_CREATE = 2;
     private static final int HOST_PES = 100;
     private static final int HOST_PES_MIPS_CAPACITY = 2000;
     private static final int HOST_RAM = 512000; //in MB
     private static final int HOST_STORAGE = 10000000; //in MB
     private static final int HOST_BW = 100000; //in Megabits/s
     private static final int VMS = 1;
-    private static final int VM_PES = 20; //initial
+    private static final int VM_PES = 40; //initial
     private static final int VM_MIPS_CAPACITY = 2000;
-    private static final int VM_RAM = (int) (0.02*HOST_RAM); //in MB, initial
+    private static final int VM_RAM =20000; //(int) (0.02*HOST_RAM); //in MB, initial
     //private static final int VM_RAM = 100000; //in MB, initial
     private static final int VM_STORAGE = 10000; //in MB
     private static final int VM_BW = 1000;
@@ -87,7 +92,7 @@ public class Simulation1 {
     private static final int CLOUDLET_PES_LOWER_BOUND = 1;
     private static final int CLOUDLET_PES_UPPER_BOUND = 3;
     private static final int INTERARRIVAL_DELAY_LOWER_BOUND = 1;
-    private static final int INTERARRIVAL_DELAY_UPPER_BOUND = 2;
+    private static final int INTERARRIVAL_DELAY_UPPER_BOUND = 1;
 
     private final CloudSim simulation;
 
@@ -388,9 +393,15 @@ public class Simulation1 {
             Vm vm = vmList.get(vmIndex);
             vm.getHost().getVmScheduler().deallocatePesFromVm(vm);
             List<Double> PEsList = new ArrayList<Double>();
-            PEsList.addAll(Collections.nCopies(numberOfPesForScaling[vmIndex],(double) 2000));
+            PEsList.addAll(Collections.nCopies(numberOfPesForScaling[vmIndex],(double) VM_MIPS_CAPACITY));
             vm.getHost().getVmScheduler().allocatePesForVm(vm, PEsList);
             vm.getProcessor().setCapacity(numberOfPesForScaling[vmIndex]);
+            Log.printFormatted("!!!!!!!!!!!!MipsShare " + vm.getCloudletScheduler().getCurrentMipsShare().size() + "\n");
+
+//            Vm vm = vmList.get(vmIndex);
+//            vm.getHost().getVmScheduler().deallocatePesFromVm(vm);
+//            vm.getProcessor().setCapacity(numberOfPesForScaling[vmIndex]);
+//            vm.getHost().getVmScheduler().allocatePesForVm(vm);
 
             //calculate ART 90th percentile
             double art90 = get90thPercentile(n90thPercentile[vmIndex]);
@@ -495,7 +506,12 @@ public class Simulation1 {
                 cloudletList.add(createCloudlet(cloudletLength, cloudletPes, secs));
             }
             totalCloudletsCreated += nofCloudletsToCreate;
-            secs += ThreadLocalRandom.current().nextInt(INTERARRIVAL_DELAY_LOWER_BOUND, INTERARRIVAL_DELAY_UPPER_BOUND);
+            if (INTERARRIVAL_DELAY_LOWER_BOUND == INTERARRIVAL_DELAY_UPPER_BOUND) {
+                secs += INTERARRIVAL_DELAY_LOWER_BOUND;
+            }
+            else {
+                secs += ThreadLocalRandom.current().nextInt(INTERARRIVAL_DELAY_LOWER_BOUND, INTERARRIVAL_DELAY_UPPER_BOUND);
+            }
         }
         Log.printFormatted("Requests Created with Uniform Distribution: " + totalCloudletsCreated + "\n");
     }
@@ -522,7 +538,12 @@ public class Simulation1 {
                 cloudletList.add(createCloudlet(cloudletLength, cloudletPes, secs));
             }
             totalCloudletsCreated += nofCloudletsToCreate;
-            secs += ThreadLocalRandom.current().nextInt(INTERARRIVAL_DELAY_LOWER_BOUND, INTERARRIVAL_DELAY_UPPER_BOUND);
+            if (INTERARRIVAL_DELAY_LOWER_BOUND == INTERARRIVAL_DELAY_UPPER_BOUND) {
+                secs += INTERARRIVAL_DELAY_LOWER_BOUND;
+            }
+            else {
+                secs += ThreadLocalRandom.current().nextInt(INTERARRIVAL_DELAY_LOWER_BOUND, INTERARRIVAL_DELAY_UPPER_BOUND);
+            }
         }
         Log.printFormatted("Requests Created with Sinusoid Distribution: " + totalCloudletsCreated + "\n");
     }
@@ -543,7 +564,7 @@ public class Simulation1 {
                 //r = new Random();
                 //cloudletLength = (long)r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
                 cloudletLength = (long) exp.sample();
-                if (cloudletLength <= 0) {
+                if (cloudletLength <= 2000) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
                 //randomimze PES needed
@@ -552,7 +573,12 @@ public class Simulation1 {
                 cloudletList.add(createCloudlet(cloudletLength, cloudletPes, secs));
             }
             totalCloudletsCreated += nofCloudletsToCreate;
-            secs += ThreadLocalRandom.current().nextInt(INTERARRIVAL_DELAY_LOWER_BOUND, INTERARRIVAL_DELAY_UPPER_BOUND);
+            if (INTERARRIVAL_DELAY_LOWER_BOUND == INTERARRIVAL_DELAY_UPPER_BOUND) {
+                secs += INTERARRIVAL_DELAY_LOWER_BOUND;
+            }
+            else {
+                secs += ThreadLocalRandom.current().nextInt(INTERARRIVAL_DELAY_LOWER_BOUND, INTERARRIVAL_DELAY_UPPER_BOUND+1);
+            }
         }
         Log.printFormatted("Requests Created with Poisson Distribution: " + totalCloudletsCreated + "\n");
     }
@@ -571,7 +597,7 @@ public class Simulation1 {
                 //cloudletLength = (long) r.nextGaussian() * CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION + CLOUDLET_LENGTH_DESIRED_MEAN; //use: r.nextGaussian()*CLOUDLET_LENGTH_DESIRED_STANDARD_DEVIATION+CLOUDLET_LENGTH_DESIRED_MEAN;
                 cloudletLength = (long)exp.sample();
                 //Log.printFormatted("Cloudlet length: " + cloudletLength + "\n");
-                if (cloudletLength <= 0) {
+                if (cloudletLength <= 2000) {
                     cloudletLength = CLOUDLET_LENGTH_DESIRED_MEAN;
                 }
                 //randomimze PES needed
@@ -651,10 +677,6 @@ public class Simulation1 {
         return cl;
     }
 
-    private void onFinishRealTimeListener (CloudletVmEventInfo cl) {
-
-    }
-
     private static int getPoisson(double lambda) {
         double L = Math.exp(-lambda);
         double p = 1.0;
@@ -694,4 +716,5 @@ public class Simulation1 {
 //        System.out.println(value);
         return value;
     }
+
 }

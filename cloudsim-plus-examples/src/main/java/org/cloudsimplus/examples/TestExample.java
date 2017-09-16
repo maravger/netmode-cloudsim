@@ -53,7 +53,6 @@ public class TestExample {
 
     public TestExample() {
         simulation = new CloudSim();
-        simulation.addOnClockTickListener(e -> System.out.println("ClockTick: " + e.getTime()));
         datacenter0 = createDatacenter();
 
         broker0 = new DatacenterBrokerSimple(simulation);
@@ -125,7 +124,7 @@ public class TestExample {
         final List<Cloudlet> list = new ArrayList<>();
         UtilizationModel utilization = new UtilizationModelFull();
         //for (int length : CLOUDLET_LENGHTS) {
-        for (int i = 0; i<20000; i++) {
+        for (int i = 0; i<2000; i++) {
             int length = ThreadLocalRandom.current().nextInt(600, 10000);
             Cloudlet cloudlet =
                 new CloudletSimple( length, CLOUDLET_PES)

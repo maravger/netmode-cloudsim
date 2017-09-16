@@ -25,8 +25,8 @@ public class RLS2 {
 //        double[] theta = compute(rm.getColumn(1), rm.getColumn(2));
 //        System.out.println(Arrays.toString(theta));
 
-        double data1[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm0_@2017.07.19.15.09.06_100Samples.csv", true);
-        double data2[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm0_@2017.07.19.15.09.06_100Samples.csv", true);
+        double data1[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm0_@2017.07.26.12.49.31_100Samples.csv", true);
+        double data2[][] = CSVUtils.readTo2dArray("/Users/avgr_m/Desktop/CSVs/Vm0_@2017.07.26.12.47.57_100Samples.csv", true);
         RealMatrix rm = new Array2DRowRealMatrix(data1);
         RealMatrix rm2 = new Array2DRowRealMatrix(data2);
         double[] x = rm.getColumn(1);

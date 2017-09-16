@@ -595,8 +595,8 @@ public abstract class DatacenterBrokerAbstract extends CloudSimEntity implements
     protected void processCloudletReturn(SimEvent ev) {
         final Cloudlet c = (Cloudlet) ev.getData();
         cloudletsFinishedList.add(c);
-        //println(String.format("%.2f: %s: %s %d finished and returned to broker.",
-        //    getSimulation().clock(), getName(), c.getClass().getSimpleName(), c.getId()));
+//        println(String.format("%.2f: %s: %s %d finished and returned to broker.",
+//            getSimulation().clock(), getName(), c.getClass().getSimpleName(), c.getId()));
         cloudletsCreated--;
 
         if(isNotAllRunningCloudletsReturned()){

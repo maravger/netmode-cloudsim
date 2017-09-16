@@ -633,8 +633,8 @@ public abstract class CloudletSchedulerAbstract implements CloudletScheduler {
      * @return
      */
     protected double timeSpan(final CloudletExecutionInfo cl, final double currentTime) {
-        return currentTime - cl.getLastProcessingTime();
-//        return Math.floor(currentTime) - Math.floor(cl.getLastProcessingTime());
+//        return currentTime - cl.getLastProcessingTime();
+       return Math.floor(currentTime) - Math.floor(cl.getLastProcessingTime());
     }
 
     /**
