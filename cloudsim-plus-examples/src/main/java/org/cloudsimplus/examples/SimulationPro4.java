@@ -76,6 +76,7 @@ public class SimulationPro4 {
     private static final int CONSTANT_TO_CREATE = 1;
 
     //control properties
+    //nothing
     private static final int TIME_TO_CHANGE_AREA = TIME_TO_FINISH_SIMULATION/4;
     private static final double[][] U_PES_MIN = {{10, 20, 30, 40}, {10, 20, 30, 40}};
     private static final double[][] U_PES_MAX = {{30, 40, 50, 60}, {30, 40, 50, 60}};
