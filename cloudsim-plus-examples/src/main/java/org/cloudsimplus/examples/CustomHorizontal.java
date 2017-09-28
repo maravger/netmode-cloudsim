@@ -188,7 +188,7 @@ public class CustomHorizontal {
     private void createNewCloudlets(EventInfo eventInfo) {
         final long time = (long) eventInfo.getTime();
         if (time % CLOUDLETS_CREATION_INTERVAL == 0 && time <= 50) {
-            final int numberOfCloudlets = 4;
+            final int numberOfCloudlets = 7;
             Log.printFormattedLine("\t#Creating %d Cloudlets at time %d.", numberOfCloudlets, time);
             List<Cloudlet> newCloudlets = new ArrayList<>(numberOfCloudlets);
             for (int i = 0; i < numberOfCloudlets; i++) {
@@ -198,6 +198,13 @@ public class CustomHorizontal {
             }
 
             broker0.submitCloudletList(newCloudlets);
+//            for (Cloudlet cl : newCloudlets) {
+//                 int cl2 = cl.getVm().getCloudletScheduler().
+//                Cloudlet cl2 = cl.getVm().getCloudletScheduler().cloudletCancel(cl.getId());
+//                Cloudlet cl2 = vm.getCloudletScheduler().cloudletCancel(cl.getId());
+//                            Log.printFormatted("Cancelled " + cl2 + "\n");
+//                            Log.printFormatted("WhoAmI " + cl.getId() + "\n");
+//            }
         }
     }
 

@@ -8,6 +8,7 @@ package org.cloudbus.cloudsim.brokers;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -94,6 +95,8 @@ public interface DatacenterBroker extends SimEntity {
      * @return the list of waiting VMs
      */
     <T extends Vm> List<T> getVmWaitingList();
+
+    <T extends Vm> Map<Cloudlet, Datacenter> getRealCloudletCreatedList();
 
     /**
      * Gets the list of VMs in execution, if they are running Cloudlets or not.

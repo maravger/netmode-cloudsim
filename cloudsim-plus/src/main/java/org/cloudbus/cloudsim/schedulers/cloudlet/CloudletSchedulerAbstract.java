@@ -637,6 +637,7 @@ public abstract class CloudletSchedulerAbstract implements CloudletScheduler {
      * @return
      */
     protected double timeSpan(double currentTime) {
+//        return currentTime - previousTime;
         return Math.floor(currentTime) - Math.floor(previousTime);
     }
 

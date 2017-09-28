@@ -319,13 +319,13 @@ public abstract class DatacenterBrokerAbstract extends CloudSimEntity implements
             return;
         }
 
-        println(String.format(
-            "%.2f: %s: List of %d Cloudlets submitted to the broker during simulation execution.",
-            getSimulation().clock(), getName(), list.size()));
+//        println(String.format(
+//            "%.2f: %s: List of %d Cloudlets submitted to the broker during simulation execution.",
+//            getSimulation().clock(), getName(), list.size()));
 
         //If there aren't more VMs to be created, then request Cloudlets creation
         if(vmWaitingList.isEmpty()){
-            println(" Cloudlets creation request sent to Datacenter.");
+//            println(" Cloudlets creation request sent to Datacenter.");
             requestDatacentersToCreateWaitingCloudlets();
             notifyOnCreationOfWaitingVmsFinishListeners();
         } else
@@ -841,6 +841,11 @@ public abstract class DatacenterBrokerAbstract extends CloudSimEntity implements
     @Override
     public Set<Cloudlet> getCloudletCreatedList() {
         return cloudletCreationRequestsMap.keySet();
+//        return cloudletCreationRequestsMap;cloudletCreationRequestsMap
+    }
+
+    public Map<Cloudlet, Datacenter> getRealCloudletCreatedList() {
+        return  cloudletCreationRequestsMap;
     }
 
     @Override

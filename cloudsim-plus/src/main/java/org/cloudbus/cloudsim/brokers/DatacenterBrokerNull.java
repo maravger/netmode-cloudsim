@@ -9,10 +9,7 @@ import org.cloudbus.cloudsim.vms.Vm;
 import org.cloudsimplus.listeners.DatacenterBrokerEventInfo;
 import org.cloudsimplus.listeners.EventListener;
 
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -61,6 +58,12 @@ final class DatacenterBrokerNull implements DatacenterBroker {
     @Override public <T extends Vm> List<T> getVmWaitingList() {
         return Collections.emptyList();
     }
+
+    @Override
+    public <T extends Vm> Map<Cloudlet, Datacenter> getRealCloudletCreatedList() {
+        return null;
+    }
+
     @Override public <T extends Vm> List<T> getVmExecList() {
         return Collections.emptyList();
     }
