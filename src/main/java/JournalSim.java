@@ -23,6 +23,8 @@ import org.cloudsimplus.builders.tables.CloudletsTableBuilder;
 import org.cloudsimplus.listeners.EventInfo;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.stream.IntStream;
@@ -32,21 +34,21 @@ public class JournalSim {
     // TODO: set debugging toggle and different colors
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 36000;
-    private static final int SCHEDULING_INTERVAL = 1;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 360;
+    private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
     // n-MMC related constants
     private static final Boolean CREATE_NMMC_TRANSITION_MATRIX = false;
     private static final int NMMC_HISTORY = 2;
     private static final String SIM_CSV_FILE_LOCATION = "/Users/avgr_m/Downloads/leivaDatas.csv";
-    private static final String READ_NMMC_CSV_FILE_LOCATION = "/Users/avgr_m/Downloads/transitionMatrix(2history1000intervals).csv";
+    private static final String READ_NMMC_CSV_FILE_LOCATION = "/Users/avgr_m/Downloads/transitionMatrix(2history12000intervals).csv";
     private static final String WRITE_NMMC_CSV_FILE_LOCATION = "/Users/avgr_m/Downloads/transitionMatrix.csv";
     private static final String WRITE_INTERVALS_CSV_FILE_LOCATION = "/Users/avgr_m/Downloads/intervalStats.csv";
 
     // Environment related constants
     private static final int POI = 9; //define points of interest
-    private static final int APPS = 1;
+    private static final int APPS = 2;
     private static final int NO_OF_DISTANCES = 1;
     private static final int MAX_USERS_PER_CELL = 2;
     private static final int GROUP_SIZE = 4; // [1..10]
@@ -60,8 +62,10 @@ public class JournalSim {
     private static final int EDGE_HOST_BW = 1000000;
 
     // VM related constants
-    private static final int[][] VM_PES = {{1, 8, 8}, {8, 8, 8}, {8, 8, 8}}; // flavors
+    private static final int[][] VM_PES = {{1, 2, 4}, {1, 2, 4}, {1, 2, 4}}; // flavors
     private static final int[][] VM_PE_MIPS = {{2000, 2000, 2000}, {2000, 2000, 2000}, {2000, 2000, 2000}};
+    private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}};
+    private static final double[][] VM_GUARANTEED_MAX_RR = {{50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}};
     private static final int VM_RAM = 4096;
     private static final int VM_BW = 200000;
 
@@ -144,27 +148,57 @@ public class JournalSim {
 //            });
         }
 
-        runSimulationAndPrintResults();
-        int[] flavorCores = {1, 2, 4};
-//        calculateFeasibleServerFormations(16, flavorCores);
+//        runSimulationAndPrintResults();
+        int[][] flavorCores = {{1, 2, 4}, {1, 2, 4}};
+//        int[] flavorCores = {1, 2, 4};
+        calculateFeasibleServerFormations(4, flavorCores);
 
         System.out.println(getClass().getSimpleName() + " finished!");
         if (CREATE_NMMC_TRANSITION_MATRIX) createNMMCTransitionMatrixCSV();
     }
 
-    private ArrayList<int[]> calculateFeasibleServerFormations(int serverCores, int[] flavorCores) {
-        ArrayList<int[]> formations = new ArrayList<>();
+    private void optimizeVmPlacement() {
 
+    }
+
+    private ArrayList<int[][]> calculateFeasibleServerFormations(int serverCores, int[][] flavorCores) {
+        ArrayList<int[][]> formations = new ArrayList<>();
+        ArrayList<int[]> tempFormations = new ArrayList<>();
+        ArrayList<int[][]> uniqueFormations = new ArrayList<>();
+
+        // Get permutations per App
         for (int length = 1; length <= serverCores; length++) {
-            for (int[] permutation : calculatePermutationsOfLength(flavorCores, length)) {
-                if (IntStream.of(permutation).sum() <= serverCores) formations.add(permutation);
+            for (int app = 0; app < APPS; app++) {
+                for (int[] permutation : calculatePermutationsOfLength(flavorCores[app], length)) {
+                    // First Check
+                    if (IntStream.of(permutation).sum() <= serverCores) tempFormations.add(permutation);
+                }
             }
         }
 
-//        for (int[] permutation : formations) {
-//            System.out.println(IntStream.of(permutation).sum());
-//            System.out.println(Arrays.toString(permutation));
-//        }
+        // Get total feasible permutations
+        for (int[][] permutation : calculatePermutationsOfLength(tempFormations, APPS)) {
+            int permutationCoreSum = 0;
+            for (int app = 0; app < APPS; app++) permutationCoreSum += IntStream.of(permutation[app]).sum();
+            if (permutationCoreSum <= serverCores) formations.add(permutation);
+        }
+
+        // Remove duplicates
+        for (int[][] newPermutation : formations) {
+            boolean unique = true;
+            for (int[][] oldPermutation : uniqueFormations)
+                if (Arrays.deepEquals(newPermutation, oldPermutation)) unique = false;
+            if (unique)
+                uniqueFormations.add(newPermutation);
+        }
+
+        for (int[][] permutation : uniqueFormations) {
+            int permutationCoreSum = 0;
+            for (int app = 0; app < APPS; app++) permutationCoreSum += IntStream.of(permutation[app]).sum();
+            System.out.println(permutationCoreSum);
+//            System.out.println(permutation.hashCode());
+            System.out.println(Arrays.deepToString(permutation));
+        }
 
         return formations;
     }
@@ -182,6 +216,20 @@ public class JournalSim {
         return permutations;
     }
 
+    // Overloading
+    private ArrayList<int[][]> calculatePermutationsOfLength(ArrayList<int[]> formations, int length) {
+        ArrayList<int[][]> permutations = new ArrayList<>();
+        int size = formations.size();
+
+        // There can be (len)^l permutations
+        for (int i = 0; i < (int)Math.pow(size, length); i++) {
+            // Convert i to len th base
+            permutations.add(createPermutation(i, formations, size, length));
+        }
+
+        return permutations;
+    }
+
     private int[] createPermutation(int n, int arr[], int len, int L) {
         int[] permutation = new int[L];
         // Sequence is of length L
@@ -193,6 +241,22 @@ public class JournalSim {
         }
 //        System.out.print();
 //        System.out.println(Arrays.toString(permutation));
+
+        return permutation;
+    }
+
+    // Overloading
+    private int[][] createPermutation(int n, ArrayList<int[]> arr, int len, int L) {
+        int[][] permutation = new int[APPS][];
+
+        // Sequence is of length L
+        for (int i = 0; i < L; i++) {
+            // Print the ith element of sequence
+//            System.out.print(arr[n % len]);
+            permutation[i] = arr.get(n % len);
+            n /= len;
+        }
+//        System.out.println(Arrays.deepToString(permutation));
 
         return permutation;
     }
@@ -257,7 +321,7 @@ public class JournalSim {
             for (int app = 0; app < APPS; app++) {
                 for (int vm = 0; vm < vmList[poi][app].size(); vm++) {
                     accumulatedCpuUtil[poi][app][vm] += vmList[poi][app].get(vm).getCpuPercentUtilization();
-//                        System.out.println("VM ID: " + poi + "" + app + "" + vm);
+//                    System.out.println("VM ID: " + poi + "" + app + "" + vm);
 //                    System.out.println("Current CPU Util: " + vmList[poi][app].get(vm).getCpuPercentUtilization());
 //                    System.out.println("Total CPU Util: " + accumulatedCpuUtil[poi][app][vm]);
                 }
@@ -284,7 +348,9 @@ public class JournalSim {
                     int app = description.get("App").getAsInt();
                     intervalFinishedTasks[poi][app]++;
                     accumulatedResponseTime[poi][app] += c.getActualCpuTime();
-//                        System.out.println(c.getFinishTime() - c.getExecStartTime());
+//                    System.out.println("Current accumulated Response Time: " + accumulatedResponseTime[poi][app]);
+//                    System.out.println(" + " + (c.getFinishTime() - c.getExecStartTime()));
+//                    System.out.println(" ------------------------------------------");
                 }
             }
         }
@@ -324,7 +390,7 @@ public class JournalSim {
                         String.format("%14s", intervalAdmittedTasks[poi][app]) + " | " + String.format("%14s",
                         intervalFinishedTasks[poi][app]) + " | " + String.format("%18.2f", intervalFinishedTasks[poi][app]
                         / (double) SAMPLING_INTERVAL) + " | " + String.format("%21.2f", accumulatedResponseTime[poi][app] /
-                        intervalFinishedTasks[poi][app]));
+                            intervalFinishedTasks[poi][app]));
                     // Print in the CSV file
                     sb.append(poi + "," + app + "," + intervalAdmittedTasks[poi][app] + "," + intervalFinishedTasks[poi][app] +
                         "," + String.format("%.2f", intervalFinishedTasks[poi][app] / (double) SAMPLING_INTERVAL) + ","
@@ -512,7 +578,6 @@ public class JournalSim {
                 if (assignedUsers[i][j] != 0) {
                     distance = random.nextInt(NO_OF_DISTANCES) + 1;
                     requestRatePerCell[i][j] = simData[(assignedUsers[i][j] * distance) - 1][12];
-//                    requestRatePerCell[i][j] = 2;
                 }
                 else {
                     requestRatePerCell[i][j] = 0;
@@ -734,8 +799,8 @@ public class JournalSim {
     private List<TaskSimple> createTasks(int noOfTasks, int exhibit, int app, int interArrivalTime) {
         final List<TaskSimple> tempTaskList = new ArrayList<>(noOfTasks);
 
-        //UtilizationModel defining the Tasks use only 20% of any resource all the time
-        final UtilizationModelDynamic utilizationModel = new UtilizationModelDynamic(0.2);
+        //UtilizationModel defining the Tasks use up to 90% of any resource all the time
+        final UtilizationModelDynamic utilizationModel = new UtilizationModelDynamic(0.9);
 
         int submissionDelay = 0;
         for (int i = 0; i < noOfTasks; i++) {
@@ -757,6 +822,7 @@ public class JournalSim {
     private void runSimulationAndPrintResults() {
         // Initial Configuration of "Interval Stats" CSV file
         try {
+            Files.deleteIfExists(Paths.get(WRITE_INTERVALS_CSV_FILE_LOCATION));
             BufferedWriter br = new BufferedWriter(new FileWriter(WRITE_INTERVALS_CSV_FILE_LOCATION));
             StringBuilder sb = new StringBuilder();
             sb.append("POI,App,Admitted Tasks,Finished Tasks,Average Throughput,Average Response Time\n");
