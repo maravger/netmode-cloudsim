@@ -12,15 +12,15 @@ public final class Optimizer {
     }
 
     // Use energy criteria
-    private static ArrayList<Integer> optimizeVmPlacement (double[][] vmGuaranteedRR, int hosts,
-                                                           ArrayList<int[]> combinations, double[] predictedWorkload)
+    public static ArrayList<Integer> optimizeVmPlacement (double[][] serverGuaranteedWorkload, double[] serverEnergyConsumption,
+                                                          int hosts, double[] predictedWorkload)
             throws LpSolveException {
 
         ArrayList<Integer> result = new ArrayList<>();
         LpSolve lp;
         int nCol, k, ret = 0;
 
-        int n = combinations.size();
+        int n = serverGuaranteedWorkload.length;
         // create a model with 0 rows and n columns
         nCol = n; // n variables
 
@@ -44,7 +44,8 @@ public final class Optimizer {
             /* construct 1st constraint (Σ pi λ1 >= Λ1) */
             for (k = 0; k < n; k++) {
                 colno[k] = k + 1;
-                row[k] = vmGuaranteedRR[0][combinations.get(k)[0]];
+//                row[k] = serverGuaranteedWorkload[0][combinations.get(k)[0]];
+                row[k] = serverGuaranteedWorkload[k][0]; // TODO: change with app variable
                 /* add the row to lpsolve */
             }
             lp.addConstraintex(k, row, colno, LpSolve.GE, predictedWorkload[0]);
@@ -52,7 +53,7 @@ public final class Optimizer {
             /* construct 2nd constraint (Σ pi λ2 >= Λ2) */
             for (k = 0; k < n; k++) {
                 colno[k] = k + 1;
-                row[k] = vmGuaranteedRR[1][combinations.get(k)[1]];
+                row[k] = serverGuaranteedWorkload[k][1]; // TODO: change with app variable
                 /* add the row to lpsolve */
             }
             lp.addConstraintex(k, row, colno, LpSolve.GE, predictedWorkload[1]);
@@ -69,14 +70,14 @@ public final class Optimizer {
 
 
             /* construct 3rd constraint, part B (pi <= 3) */
-            for (k = 0; k < n; k++) {
-                colno[k] = k + 1;
-                row[k] = 1;
-                /* add the row to lpsolve */
-                lp.addConstraintex(k + 1, row, colno, LpSolve.LE, 3);
-                Arrays.fill(row, 0);
-                Arrays.fill(colno, 0);
-            }
+//            for (k = 0; k < n; k++) {
+//                colno[k] = k + 1;
+//                row[k] = 1;
+//                /* add the row to lpsolve */
+//                lp.addConstraintex(k + 1, row, colno, LpSolve.LE, 3);
+//                Arrays.fill(row, 0);
+//                Arrays.fill(colno, 0);
+//            }
 
             /* construct 4th constraint (Σ pi <= Hosts */
             for (k = 0; k < n; k++) {
@@ -90,7 +91,8 @@ public final class Optimizer {
             lp.setAddRowmode(false); /* rowmode should be turned off again when done building the model */
             for (k = 0; k < n; k++) {
                 colno[k] = k + 1;
-                row[k] = 1;
+//                row[k] = 1;
+                row[k] = serverEnergyConsumption[k];
                 /* add the row to lpsolve */
             }
             lp.setObjFnex(k, row, colno);
@@ -115,21 +117,24 @@ public final class Optimizer {
             /* a solution is calculated, now lets get some results */
 
             /* objective value */
-//            System.out.println("Objective value: " + lp.getObjective());
+            System.out.println("Objective value: " + lp.getObjective());
 
             /* variable values */
             lp.getVariables(row);
             for (k = 0; k < nCol; k++) {
-//                System.out.println(lp.getColName(k + 1) + ": " + row[k]);
+                System.out.println(lp.getColName(k + 1) + ": " + row[k]);
                 for (int v = (int) row[k]; v > 0; v--)
                     result.add(k);
             }
             //if result size < HOSTS then add zeros padding
             while (result.size() < hosts) result.add(0);
-//            System.out.println(Arrays.toString(result.toArray()));
+            System.out.println(Arrays.toString(result.toArray()));
+            lp.printSolution(0);
+            lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");
             /* we are done now */
         } else {
             System.out.println("\n\t#-------------------------------------------- Optimizer failed; random combs");
+            lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");
             while (result.size() < hosts) result.add(ThreadLocalRandom.current().nextInt(0, n));
         }
 

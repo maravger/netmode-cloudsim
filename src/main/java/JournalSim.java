@@ -1,6 +1,8 @@
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import javafx.util.Pair;
+import lpsolve.LpSolveException;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.math3.distribution.PoissonDistribution;
 import org.cloudbus.cloudsim.allocationpolicies.VmAllocationPolicySimple;
 import org.cloudbus.cloudsim.cloudlets.Cloudlet;
@@ -62,7 +64,7 @@ public class JournalSim {
     private static final int EDGE_HOST_BW = 1000000;
 
     // VM related constants
-    private static final int[][] VM_PES = {{1, 2, 4}, {1, 2, 4}, {1, 2, 4}}; // flavors
+    private static final int[][] VM_PES = {{1, 2, 4}, {1, 2, 4}, {1, 2, 4}}; // [app][flavor]
     private static final int[][] VM_PE_MIPS = {{2000, 2000, 2000}, {2000, 2000, 2000}, {2000, 2000, 2000}};
     private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}};
     private static final double[][] VM_GUARANTEED_MAX_RR = {{50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}};
@@ -151,7 +153,18 @@ public class JournalSim {
 //        runSimulationAndPrintResults();
         int[][] flavorCores = {{1, 2, 4}, {1, 2, 4}};
 //        int[] flavorCores = {1, 2, 4};
-        calculateFeasibleServerFormations(4, flavorCores);
+        ArrayList<int[][]> feasibleFormations = calculateFeasibleServerFormations(4, flavorCores);
+        double[][] guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
+        double[] energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
+        double[] predictedWorkload = {200, 400};
+        System.out.println(Arrays.deepToString(guaranteedWorkload));
+        System.out.println(Arrays.toString(energyConsumption));
+
+        try {
+            Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, 5, predictedWorkload);
+        } catch (LpSolveException e) {
+            e.printStackTrace();
+        }
 
         System.out.println(getClass().getSimpleName() + " finished!");
         if (CREATE_NMMC_TRANSITION_MATRIX) createNMMCTransitionMatrixCSV();
@@ -159,6 +172,49 @@ public class JournalSim {
 
     private void optimizeVmPlacement() {
 
+    }
+
+    private double[][] calculateServerGuaranteedWorkload(ArrayList<int[][]> feasibleFormations) {
+        int totalFormations = feasibleFormations.size();
+        double[][] guaranteedWorkload = new double[totalFormations][APPS];
+
+        for (int permutation = 0; permutation < totalFormations; permutation++) {
+//            System.out.println(Arrays.deepToString(feasibleFormations.get(permutation)));
+            for (int app = 0; app < APPS; app++) {
+                for (int flavor : feasibleFormations.get(permutation)[app]) {
+                    guaranteedWorkload[permutation][app] += VM_GUARANTEED_AVG_RR[app][ArrayUtils.indexOf(VM_PES[app], flavor)];
+                }
+            }
+        }
+
+//        System.out.println(Arrays.deepToString(guaranteedWorkload));
+
+        return guaranteedWorkload;
+    }
+
+    private double[] calculateServerPowerConsumption(ArrayList<int[][]> feasibleFormations, int serverCores) {
+        int totalFormations = feasibleFormations.size();
+        double[] energyConsumption = new double[feasibleFormations.size()];
+        double pMax = 2000; // the maximum power consumed when the server is fully utilized, in Watts
+        double k = 0.6; // k is the fraction of power consumed by an idle server (usually around 70%)
+
+        for (int permutation = 0; permutation < totalFormations; permutation++) {
+//            System.out.println(Arrays.deepToString(feasibleFormations.get(permutation)));
+            for (int app = 0; app < APPS; app++) {
+                for (int flavor : feasibleFormations.get(permutation)[app]) {
+//                    System.out.println(ArrayUtils.indexOf(VM_PES[app], flavor));
+                    energyConsumption[permutation] += calculateVmPowerConsumption(serverCores, VM_PES[app][flavor], k, pMax);
+//                    System.out.println(energyConsumption[permutation]);
+                }
+            }
+        }
+
+        return energyConsumption;
+    }
+
+    // Use Energy Model defined in paper to predict the power consumed by each VM provisioned in a server with an error below 5%
+    private double calculateVmPowerConsumption(int serverCores, int vmCores, double k, double pMax) {
+        return k * pMax + ((1 - k) * pMax * vmCores / serverCores);
     }
 
     private ArrayList<int[][]> calculateFeasibleServerFormations(int serverCores, int[][] flavorCores) {
@@ -185,9 +241,14 @@ public class JournalSim {
 
         // Remove duplicates
         for (int[][] newPermutation : formations) {
+            // Sort flavors inside
+            for (int[] appWisePermutation : newPermutation) Arrays.sort(appWisePermutation);
             boolean unique = true;
-            for (int[][] oldPermutation : uniqueFormations)
+            for (int[][] oldPermutation : uniqueFormations) {
+                // Sort flavors inside
+                for (int[] appWisePermutation : oldPermutation) Arrays.sort(appWisePermutation);
                 if (Arrays.deepEquals(newPermutation, oldPermutation)) unique = false;
+            }
             if (unique)
                 uniqueFormations.add(newPermutation);
         }
@@ -195,12 +256,11 @@ public class JournalSim {
         for (int[][] permutation : uniqueFormations) {
             int permutationCoreSum = 0;
             for (int app = 0; app < APPS; app++) permutationCoreSum += IntStream.of(permutation[app]).sum();
-            System.out.println(permutationCoreSum);
-//            System.out.println(permutation.hashCode());
+//            System.out.println(permutationCoreSum);
             System.out.println(Arrays.deepToString(permutation));
         }
 
-        return formations;
+        return uniqueFormations;
     }
 
     private ArrayList<int[]> calculatePermutationsOfLength(int[] flavorCores, int length) {
