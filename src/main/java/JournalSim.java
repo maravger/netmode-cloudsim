@@ -152,26 +152,25 @@ public class JournalSim {
 
 //        runSimulationAndPrintResults();
         int[][] flavorCores = {{1, 2, 4}, {1, 2, 4}};
-//        int[] flavorCores = {1, 2, 4};
         ArrayList<int[][]> feasibleFormations = calculateFeasibleServerFormations(4, flavorCores);
         double[][] guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
         double[] energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
         double[] predictedWorkload = {200, 400};
-        System.out.println(Arrays.deepToString(guaranteedWorkload));
-        System.out.println(Arrays.toString(energyConsumption));
-
-        try {
-            Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, 5, predictedWorkload);
-        } catch (LpSolveException e) {
-            e.printStackTrace();
-        }
+        optimizeVmPlacement(guaranteedWorkload, energyConsumption, 3, predictedWorkload);
 
         System.out.println(getClass().getSimpleName() + " finished!");
         if (CREATE_NMMC_TRANSITION_MATRIX) createNMMCTransitionMatrixCSV();
     }
 
-    private void optimizeVmPlacement() {
-
+    private void optimizeVmPlacement(double[][] guaranteedWorkload, double[] energyConsumption,
+                                     int hosts, double[] predictedWorkload) {
+        System.out.println(Arrays.deepToString(guaranteedWorkload));
+        System.out.println(Arrays.toString(energyConsumption));
+        try {
+            Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, hosts, predictedWorkload);
+        } catch (LpSolveException e) {
+            e.printStackTrace();
+        }
     }
 
     private double[][] calculateServerGuaranteedWorkload(ArrayList<int[][]> feasibleFormations) {
