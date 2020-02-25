@@ -113,7 +113,7 @@ public final class Optimizer {
             }
 
             //if result size < HOSTS then add zeros padding
-            while (result.size() < hosts) result.add(0);
+//            while (result.size() < hosts) result.add(0); // TODO not sure if needed anymore
             System.out.println(Arrays.toString(result.toArray()));
             lp.printSolution(0);
             lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");
@@ -121,7 +121,7 @@ public final class Optimizer {
         } else {
             System.out.println("\n\t#----------------------------- Optimizer failed; solving maximization problem");
             lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");
-            maximizeServedRequests(serverGuaranteedWorkload, hosts, predictedWorkload);
+            result = maximizeServedRequests(serverGuaranteedWorkload, hosts, predictedWorkload);
         }
 
         /* clean up such that all used memory by lpsolve is freed */
@@ -224,7 +224,7 @@ public final class Optimizer {
             }
             System.out.println("App1 workload: " + workloadServed[0]);
             System.out.println("App2 workload: " + workloadServed[1]);
-            while (result.size() < hosts) result.add(0);
+//            while (result.size() < hosts) result.add(0); // TODO not sure if needed anymore
             System.out.println(Arrays.toString(result.toArray()));
             lp.printSolution(0);
             lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");

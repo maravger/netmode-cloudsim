@@ -155,22 +155,114 @@ public class JournalSim {
         ArrayList<int[][]> feasibleFormations = calculateFeasibleServerFormations(4, flavorCores);
         double[][] guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
         double[] energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
-        double[] predictedWorkload = {200, 400};
-        optimizeVmPlacement(guaranteedWorkload, energyConsumption, 3, predictedWorkload);
+        double[][] predictedWorkload = {{50, 100}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}};
+        ArrayList<Integer>[] vmPlacement = optimizeVmPlacement(guaranteedWorkload, energyConsumption, 3, predictedWorkload);
+        calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
 
         System.out.println(getClass().getSimpleName() + " finished!");
         if (CREATE_NMMC_TRANSITION_MATRIX) createNMMCTransitionMatrixCSV();
     }
 
-    private void optimizeVmPlacement(double[][] guaranteedWorkload, double[] energyConsumption,
-                                     int hosts, double[] predictedWorkload) {
-        System.out.println(Arrays.deepToString(guaranteedWorkload));
-        System.out.println(Arrays.toString(energyConsumption));
-        try {
-            Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, hosts, predictedWorkload);
-        } catch (LpSolveException e) {
-            e.printStackTrace();
+    // Take decisions with a second-wise granularity
+    private void masterOfPuppets(final EventInfo evt) {
+//        System.out.println((int)evt.getTime());
+        int[][] assignedUsers;
+
+        // Initial configurations
+        if (firstEvent) {
+            correctlyCreateVmDescriptions();
+            firstEvent = false;
         }
+
+        if (!(lastAccessed == (int) evt.getTime())) {
+
+            collectVmStats();
+
+            // If a full interval has been completed or first interval, move group and generate request rate per cell
+            if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || ((int) evt.getTime() < SAMPLING_INTERVAL)) {
+                // Move group
+                alreadyAccessed[prevPos.get(0)][prevPos.get(1)] = 1;
+                ArrayList<Integer> nextPos = moveGroup(0, 3, prevPos);
+                if (CREATE_NMMC_TRANSITION_MATRIX) logTransitions(GRID_SIZE * prevPos.get(0) + prevPos.get(1),
+                        GRID_SIZE * nextPos.get(0) + nextPos.get(1));
+                prevPos = nextPos;
+                howManyVisited++;
+                // Check if group has finished the tour
+                if (howManyVisited == GRID_SIZE * GRID_SIZE) {
+//                System.out.println("!!! Tour Finished");
+                    alreadyAccessed = new int[GRID_SIZE][GRID_SIZE];
+                    howManyVisited = 1;
+                }
+                assignedUsers = createRandomUsers(GRID_SIZE, nextPos, GROUP_SIZE);
+                requestRatePerCell = createRequestRate(assignedUsers);
+
+                // If a full interval has been completed, gather stats and present them
+                if ((int) evt.getTime() % SAMPLING_INTERVAL == 0) {
+                    // Collect Stats
+                    IntervalStats stats =  collectTaskStats();
+                    int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
+                    int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
+                    double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
+                    formatAndPrintIntervalStats(intervalFinishedTasks,
+                            intervalAdmittedTasks, accumulatedResponseTime);
+                    accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
+                    lastIntervalFinishTime = (int) evt.getTime();
+                }
+            }
+
+            // Create requests based on generated request rate
+            int app = 0; // TODO: create workload for more than one apps
+            if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
+
+            lastAccessed = (int) evt.getTime();
+        }
+    }
+
+    private double[][] calculateResidualWorkload(ArrayList<Integer>[] vmPlacement, double[][] guaranteedWorkload,
+                                                 double[][] predictedWorkload) {
+        double[][] residualWorkload = new double[POI][APPS];
+
+        for (int poi = 0; poi < POI; poi++) {
+            double[] servedWorkload = new double[APPS];
+            for (int vmFormation : vmPlacement[poi]) {
+                for (int app = 0; app < APPS; app++) {
+                    servedWorkload[app] += guaranteedWorkload[vmFormation][app];
+                }
+            }
+            for (int app = 0; app < APPS; app++) {
+                if (servedWorkload[app] - predictedWorkload[poi][app] > 0)
+                    residualWorkload[poi][app] = 0;
+                else
+                    residualWorkload[poi][app] = predictedWorkload[poi][app] - servedWorkload[app];
+            }
+            System.out.println("Served Workload" + Arrays.toString(servedWorkload));
+            System.out.println("Predicted Workload" + Arrays.toString(predictedWorkload[poi]));
+            System.out.println("Residual Workload" + Arrays.toString(residualWorkload[poi]));
+        }
+
+
+        return residualWorkload;
+    }
+//
+//    private double[][] calculateResidualResources() {
+//
+//    }
+
+    private ArrayList<Integer>[] optimizeVmPlacement(double[][] guaranteedWorkload, double[] energyConsumption,
+                                     int hosts, double[][] predictedWorkload) {
+        ArrayList<Integer>[] vmPlacement = new ArrayList[POI];
+
+        for (int poi = 0; poi < POI; poi++) {
+//            System.out.println(Arrays.deepToString(guaranteedWorkload));
+//            System.out.println(Arrays.toString(energyConsumption));
+            try {
+                vmPlacement[poi] = Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, hosts, predictedWorkload[poi]);
+            } catch (LpSolveException e) {
+                e.printStackTrace();
+            }
+        }
+        System.out.println("\n\n" + Arrays.deepToString(vmPlacement));
+        return vmPlacement;
     }
 
     private double[][] calculateServerGuaranteedWorkload(ArrayList<int[][]> feasibleFormations) {
@@ -318,61 +410,6 @@ public class JournalSim {
 //        System.out.println(Arrays.deepToString(permutation));
 
         return permutation;
-    }
-
-    // Take decisions with a second-wise granularity
-    private void masterOfPuppets(final EventInfo evt) {
-//        System.out.println((int)evt.getTime());
-        int[][] assignedUsers;
-
-        // Initial configurations
-        if (firstEvent) {
-            correctlyCreateVmDescriptions();
-            firstEvent = false;
-        }
-
-        if (!(lastAccessed == (int) evt.getTime())) {
-
-            collectVmStats();
-
-            // If a full interval has been completed or first interval, move group and generate request rate per cell
-            if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || ((int) evt.getTime() < SAMPLING_INTERVAL)) {
-                // Move group
-                alreadyAccessed[prevPos.get(0)][prevPos.get(1)] = 1;
-                ArrayList<Integer> nextPos = moveGroup(0, 3, prevPos);
-                if (CREATE_NMMC_TRANSITION_MATRIX) logTransitions(GRID_SIZE * prevPos.get(0) + prevPos.get(1),
-                    GRID_SIZE * nextPos.get(0) + nextPos.get(1));
-                prevPos = nextPos;
-                howManyVisited++;
-                // Check if group has finished the tour
-                if (howManyVisited == GRID_SIZE * GRID_SIZE) {
-//                System.out.println("!!! Tour Finished");
-                    alreadyAccessed = new int[GRID_SIZE][GRID_SIZE];
-                    howManyVisited = 1;
-                }
-                assignedUsers = createRandomUsers(GRID_SIZE, nextPos, GROUP_SIZE);
-                requestRatePerCell = createRequestRate(assignedUsers);
-
-                // If a full interval has been completed, gather stats and present them
-                if ((int) evt.getTime() % SAMPLING_INTERVAL == 0) {
-                    // Collect Stats
-                    IntervalStats stats =  collectTaskStats();
-                    int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
-                    int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
-                    double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
-                    formatAndPrintIntervalStats(intervalFinishedTasks,
-                        intervalAdmittedTasks, accumulatedResponseTime);
-                    accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
-                    lastIntervalFinishTime = (int) evt.getTime();
-                }
-            }
-
-            // Create requests based on generated request rate
-            int app = 0; // TODO: create workload for more than one apps
-            if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
-
-            lastAccessed = (int) evt.getTime();
-        }
     }
 
     private void collectVmStats() {
