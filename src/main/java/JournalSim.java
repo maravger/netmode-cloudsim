@@ -34,6 +34,7 @@ import java.util.stream.IntStream;
 public class JournalSim {
     // TODO: read these values from external file
     // TODO: set debugging toggle and different colors
+    // TODO: do not use constants in methods; add them to method call
 
     // Simulation related constants
     private static final double TIME_TO_TERMINATE_SIMULATION = 360;
@@ -160,6 +161,7 @@ public class JournalSim {
         ArrayList<Integer>[] vmPlacement = optimizeVmPlacement(feasibleFormations, guaranteedWorkload, energyConsumption,
                 3, predictedWorkload, 4, 0.5);
         calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
+        calculateResidualResources(vmPlacement, 3);
 
         System.out.println(getClass().getSimpleName() + " finished!");
         if (CREATE_NMMC_TRANSITION_MATRIX) createNMMCTransitionMatrixCSV();
@@ -237,17 +239,27 @@ public class JournalSim {
                 else
                     residualWorkload[poi][app] = predictedWorkload[poi][app] - servedWorkload[app];
             }
-            System.out.println("Served Workload" + Arrays.toString(servedWorkload));
-            System.out.println("Predicted Workload" + Arrays.toString(predictedWorkload[poi]));
-            System.out.println("Residual Workload" + Arrays.toString(residualWorkload[poi]));
+//            System.out.println("Served Workload" + Arrays.toString(servedWorkload));
+//            System.out.println("Predicted Workload" + Arrays.toString(predictedWorkload[poi]));
+//            System.out.println("Residual Workload" + Arrays.toString(residualWorkload[poi]));
         }
 
+        System.out.println("Total Residual Workload: " + Arrays.deepToString(residualWorkload));
         return residualWorkload;
     }
-//
-//    private double[][] calculateResidualResources() {
-//
-//    }
+
+    private int[] calculateResidualResources(ArrayList<Integer>[] vmPlacement, int numberOfHosts) {
+        int[] residualResources = new int[POI];
+
+        int poi = 0;
+        for (ArrayList<Integer> site : vmPlacement) {
+            residualResources[poi] = numberOfHosts - site.size();
+            poi++;
+        }
+
+        System.out.println("Total Residual Resources: " + Arrays.toString(residualResources));
+        return residualResources;
+    }
 
     private ArrayList<Integer>[] optimizeVmPlacement(ArrayList<int[][]> feasibleFormations, double[][] guaranteedWorkload,
                                                      double[] energyConsumption, int hosts, double[][] predictedWorkload,
@@ -276,7 +288,7 @@ public class JournalSim {
                 if ((serverCoreSum / (double) edgeHostPes) <= cutOffPoint) site.remove(server);
             }
         }
-        System.out.println("\n\n" + Arrays.deepToString(vmPlacement));
+        System.out.println("Vm Placement: " + Arrays.deepToString(vmPlacement));
 
         return vmPlacement;
     }
@@ -294,7 +306,7 @@ public class JournalSim {
             }
         }
 
-//        System.out.println(Arrays.deepToString(guaranteedWorkload));
+        System.out.println("Server Formations Guaranteed Workload: " + Arrays.deepToString(guaranteedWorkload));
 
         return guaranteedWorkload;
     }
@@ -315,6 +327,8 @@ public class JournalSim {
                 }
             }
         }
+
+        System.out.println("Server Formations Power Consumption: " + Arrays.toString(energyConsumption));
 
         return energyConsumption;
     }
@@ -364,7 +378,7 @@ public class JournalSim {
             int permutationCoreSum = 0;
             for (int app = 0; app < APPS; app++) permutationCoreSum += IntStream.of(permutation[app]).sum();
 //            System.out.println(permutationCoreSum);
-            System.out.println(Arrays.deepToString(permutation));
+//            System.out.println(Arrays.deepToString(permutation));
         }
 
         return uniqueFormations;

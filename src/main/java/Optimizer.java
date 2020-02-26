@@ -107,19 +107,19 @@ public final class Optimizer {
             /* variable values */
             lp.getVariables(row);
             for (k = 0; k < nCol; k++) {
-                System.out.println(lp.getColName(k + 1) + ": " + row[k]);
+//                System.out.println(lp.getColName(k + 1) + ": " + row[k]);
                 for (int v = (int) row[k]; v > 0; v--)
                     result.add(k);
             }
 
             //if result size < HOSTS then add zeros padding
 //            while (result.size() < hosts) result.add(0); // TODO not sure if needed anymore
-            System.out.println(Arrays.toString(result.toArray()));
-            lp.printSolution(0);
+//            System.out.println(Arrays.toString(result.toArray()));
+//            lp.printSolution(0);
             lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");
             /* we are done now */
         } else {
-            System.out.println("\n\t#----------------------------- Optimizer failed; solving maximization problem");
+//            System.out.println("\n\t#----------------------------- Optimizer failed; solving maximization problem");
             lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");
             result = maximizeServedRequests(serverGuaranteedWorkload, hosts, predictedWorkload);
         }
@@ -209,11 +209,11 @@ public final class Optimizer {
         }
 
         if (ret == 0) {
-            System.out.println("Objective value: " + lp.getObjective());
+//            System.out.println("Objective value: " + lp.getObjective());
 
             lp.getVariables(row);
             for (k = 0; k < nCol; k++) {
-                System.out.println(lp.getColName(k + 1) + ": " + row[k]);
+//                System.out.println(lp.getColName(k + 1) + ": " + row[k]);
                 for (int v = (int) row[k]; v > 0; v--)
                     result.add(k);
             }
@@ -222,11 +222,11 @@ public final class Optimizer {
                 workloadServed[0] += row[k] * serverGuaranteedWorkload[k][0];
                 workloadServed[1] += row[k] * serverGuaranteedWorkload[k][1];
             }
-            System.out.println("App1 workload: " + workloadServed[0]);
-            System.out.println("App2 workload: " + workloadServed[1]);
+//            System.out.println("App1 workload: " + workloadServed[0]);
+//            System.out.println("App2 workload: " + workloadServed[1]);
 //            while (result.size() < hosts) result.add(0); // TODO not sure if needed anymore
-            System.out.println(Arrays.toString(result.toArray()));
-            lp.printSolution(0);
+//            System.out.println(Arrays.toString(result.toArray()));
+//            lp.printSolution(0);
             lp.writeLp("/Users/avgr_m/Downloads/lpSolution.txt");
         } else {
             System.out.println("\n\t#----------------------------- Optimizer failed; random combs");
