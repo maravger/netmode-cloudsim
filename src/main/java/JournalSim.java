@@ -155,8 +155,10 @@ public class JournalSim {
         ArrayList<int[][]> feasibleFormations = calculateFeasibleServerFormations(4, flavorCores);
         double[][] guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
         double[] energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
-        double[][] predictedWorkload = {{50, 100}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}};
-        ArrayList<Integer>[] vmPlacement = optimizeVmPlacement(guaranteedWorkload, energyConsumption, 3, predictedWorkload);
+        double[][] predictedWorkload = {{50, 100}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400},
+                {200, 400}, {200, 400}};
+        ArrayList<Integer>[] vmPlacement = optimizeVmPlacement(feasibleFormations, guaranteedWorkload, energyConsumption,
+                3, predictedWorkload, 4, 0.5);
         calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
 
         System.out.println(getClass().getSimpleName() + " finished!");
@@ -240,7 +242,6 @@ public class JournalSim {
             System.out.println("Residual Workload" + Arrays.toString(residualWorkload[poi]));
         }
 
-
         return residualWorkload;
     }
 //
@@ -248,10 +249,12 @@ public class JournalSim {
 //
 //    }
 
-    private ArrayList<Integer>[] optimizeVmPlacement(double[][] guaranteedWorkload, double[] energyConsumption,
-                                     int hosts, double[][] predictedWorkload) {
+    private ArrayList<Integer>[] optimizeVmPlacement(ArrayList<int[][]> feasibleFormations, double[][] guaranteedWorkload,
+                                                     double[] energyConsumption, int hosts, double[][] predictedWorkload,
+                                                     int edgeHostPes, double cutOffPoint) {
         ArrayList<Integer>[] vmPlacement = new ArrayList[POI];
 
+        // Solve lp optimization
         for (int poi = 0; poi < POI; poi++) {
 //            System.out.println(Arrays.deepToString(guaranteedWorkload));
 //            System.out.println(Arrays.toString(energyConsumption));
@@ -261,7 +264,20 @@ public class JournalSim {
                 e.printStackTrace();
             }
         }
+//        System.out.println("\n\n" + Arrays.deepToString(vmPlacement));
+
+        // Cut out "underutilised" servers. Underutilisation criteria = less than 50% of the cores allocated
+        for (ArrayList<Integer> site : vmPlacement) {
+            for (int server : site) {
+                int serverCoreSum = 0;
+                for (int app = 0; app < APPS; app++) serverCoreSum += IntStream.of(feasibleFormations.get(server)[app]).sum();
+//                System.out.println(serverCoreSum);
+
+                if ((serverCoreSum / (double) edgeHostPes) <= cutOffPoint) site.remove(server);
+            }
+        }
         System.out.println("\n\n" + Arrays.deepToString(vmPlacement));
+
         return vmPlacement;
     }
 
