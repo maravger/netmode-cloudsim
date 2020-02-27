@@ -339,7 +339,7 @@ public class JournalSim {
         // Get permutations per App
         for (int length = 1; length <= serverCores; length++) {
             for (int app = 0; app < APPS; app++) {
-                for (int[] permutation : calculatePermutationsOfLength(flavorCores[app], length)) {
+                for (int[] permutation : Permutator.calculatePermutationsOfLength(flavorCores[app], length)) {
                     // First Check
                     if (IntStream.of(permutation).sum() <= serverCores) tempFormations.add(permutation);
                 }
@@ -347,7 +347,7 @@ public class JournalSim {
         }
 
         // Get total feasible permutations
-        for (int[][] permutation : calculatePermutationsOfLength(tempFormations, APPS)) {
+        for (int[][] permutation : Permutator.calculatePermutationsOfLength(tempFormations, APPS)) {
             int permutationCoreSum = 0;
             for (int app = 0; app < APPS; app++) permutationCoreSum += IntStream.of(permutation[app]).sum();
             if (permutationCoreSum <= serverCores) formations.add(permutation);
@@ -375,64 +375,6 @@ public class JournalSim {
         }
 
         return uniqueFormations;
-    }
-
-    private ArrayList<int[]> calculatePermutationsOfLength(int[] flavorCores, int length) {
-        ArrayList<int[]> permutations = new ArrayList<>();
-        int size = flavorCores.length;
-
-        // There can be (len)^l permutations
-        for (int i = 0; i < (int)Math.pow(size, length); i++) {
-            // Convert i to len th base
-            permutations.add(createPermutation(i, flavorCores, size, length));
-        }
-
-        return permutations;
-    }
-
-    // Overloading
-    private ArrayList<int[][]> calculatePermutationsOfLength(ArrayList<int[]> formations, int length) {
-        ArrayList<int[][]> permutations = new ArrayList<>();
-        int size = formations.size();
-
-        // There can be (len)^l permutations
-        for (int i = 0; i < (int)Math.pow(size, length); i++) {
-            // Convert i to len th base
-            permutations.add(createPermutation(i, formations, size, length));
-        }
-
-        return permutations;
-    }
-
-    private int[] createPermutation(int n, int arr[], int len, int L) {
-        int[] permutation = new int[L];
-        // Sequence is of length L
-        for (int i = 0; i < L; i++) {
-            // Print the ith element of sequence
-//            System.out.print(arr[n % len]);
-            permutation[i] = arr[n % len];
-            n /= len;
-        }
-//        System.out.print();
-//        System.out.println(Arrays.toString(permutation));
-
-        return permutation;
-    }
-
-    // Overloading
-    private int[][] createPermutation(int n, ArrayList<int[]> arr, int len, int L) {
-        int[][] permutation = new int[APPS][];
-
-        // Sequence is of length L
-        for (int i = 0; i < L; i++) {
-            // Print the ith element of sequence
-//            System.out.print(arr[n % len]);
-            permutation[i] = arr.get(n % len);
-            n /= len;
-        }
-//        System.out.println(Arrays.deepToString(permutation));
-
-        return permutation;
     }
 
     private void collectVmStats() {
