@@ -43,9 +43,10 @@ public class JournalSim {
     // Environment related constants
     private static final int POI = 9; //define points of interest
     private static final int APPS = 2;
+    private static final int GROUPS = 9;
     private static final int NO_OF_DISTANCES = 1;
     private static final int MAX_USERS_PER_CELL = 2;
-    private static final int GROUP_SIZE = 4; // [1..10]
+    private static final int GROUP_SIZE = 8; // [1..10]
     private static final int GRID_SIZE = 3;
 
     // Edge Servers related constants
@@ -68,9 +69,7 @@ public class JournalSim {
     private static final int TASK_LENGTH = 1000;
 
     // Various "global" variables
-    private int[][] alreadyAccessed; // 1 = been there, 0 = not been there
     private Double[][] simData;
-    private int howManyVisited;
     private int lastAccessed;
     private int maxVmSize;
     private final CloudSim simulation = new CloudSim();
@@ -83,10 +82,10 @@ public class JournalSim {
     private HashMap<String, int[]> transitionsLog;
     private HashMap<String, double[]> transitionProbabilitiesMap;
     private String historicState;
-    private ArrayList<Integer> prevPos;
     private double[][] requestRatePerCell;
     private Boolean firstEvent;
     private CSVmachine csvm;
+    private Group[] groups;
 
     public static void main(String[] args) {
         new JournalSim();
@@ -95,19 +94,26 @@ public class JournalSim {
     public JournalSim() {
         csvm = new CSVmachine(POI, APPS, SAMPLING_INTERVAL);
 
-        alreadyAccessed = new int[GRID_SIZE][GRID_SIZE];
+        groups = new Group[GROUPS];
         edgeBroker = new DatacenterBrokerSimpleExtended[POI];
         vmList = (ArrayList<Vm>[][]) new ArrayList[POI][APPS];
         taskList = (ArrayList<TaskSimple>[][]) new ArrayList[POI][APPS];
         taskCounter = new int[POI][APPS];
-        prevPos = new ArrayList<>(Arrays.asList(0, 0));
 
         simData = csvm.readSimCSVData();
-        howManyVisited = 1;
         firstEvent = true;
         historicState = "";
 
-        // One broker and one datacenter per Point of Interest
+        // Create groups with random starting position
+        for (int group = 0; group < GROUPS; group++) {
+            Random rand = new Random();
+            int size = rand.nextInt(GROUP_SIZE);
+            int app = rand.nextInt(APPS);
+            Coordinates currPos = new Coordinates(rand.nextInt(GRID_SIZE), rand.nextInt(GRID_SIZE));
+            groups[group] = new Group(group, size, app, currPos, GRID_SIZE);
+        }
+
+        // Add one broker and one datacenter per Point of Interest
         for (int poi = 0; poi < POI; poi++) {
             Set<Datacenter> edgeDCList = new HashSet<>();
             Datacenter dc = createDatacenter(EDGE_HOSTS, EDGE_HOST_PES, EDGE_HOST_PE_MIPS, EDGE_HOST_RAM, EDGE_HOST_BW);
@@ -175,22 +181,21 @@ public class JournalSim {
         if (!(lastAccessed == (int) evt.getTime())) {
             collectVmStats();
 
-            // If a full interval has been completed or first interval, move group and generate request rate per cell
+            // If a full interval has been completed or first interval, predict group movement, actually move group
+            // and generate request rate per cell
             if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || ((int) evt.getTime() < SAMPLING_INTERVAL)) {
-                // Move group
-                alreadyAccessed[prevPos.get(0)][prevPos.get(1)] = 1;
-                ArrayList<Integer> nextPos = moveGroup(0, 3, prevPos);
-                if (CREATE_NMMC_TRANSITION_MATRIX) logTransitions(GRID_SIZE * prevPos.get(0) + prevPos.get(1),
-                        GRID_SIZE * nextPos.get(0) + nextPos.get(1));
-                prevPos = nextPos;
-                howManyVisited++;
-                // Check if group has finished the tour
-                if (howManyVisited == GRID_SIZE * GRID_SIZE) {
-//                System.out.println("!!! Tour Finished");
-                    alreadyAccessed = new int[GRID_SIZE][GRID_SIZE];
-                    howManyVisited = 1;
+                // Predict group movement and random users arrival
+
+
+                for (Group group : groups) {
+                    // Move group
+                    group.updateAlreadyAccessed();
+                    group.move();
+                    if (CREATE_NMMC_TRANSITION_MATRIX) logTransitions(GRID_SIZE * group.currPos.x + group.currPos.y,
+                            GRID_SIZE * group.nextPos.x + group.nextPos.y);
+                    group.updatePosition();
                 }
-                assignedUsers = createRandomUsers(GRID_SIZE, nextPos, GROUP_SIZE);
+                assignedUsers = createRandomUsers(GRID_SIZE, groups);
                 requestRatePerCell = createRequestRate(assignedUsers);
 
                 // If a full interval has been completed, gather stats and present them
@@ -501,124 +506,32 @@ public class JournalSim {
                 }
             }
         }
-//        System.out.println(Arrays.deepToString(assignedUsers));
-//        System.out.println(Arrays.deepToString(requestRatePerCell));
+        System.out.println(Arrays.deepToString(assignedUsers));
+        System.out.println(Arrays.deepToString(requestRatePerCell));
 
         return requestRatePerCell;
     }
 
-    private int[][] createRandomUsers(int gridSize, ArrayList<Integer> groupPos, int groupSize) {
+    private int[][] createRandomUsers(int gridSize, Group[] groups) {
         Random random = new Random();
         int[][] usersPerCell = new int[gridSize][gridSize];
 
-        for (int i = 0; i < gridSize; i++) {
-            for (int j = 0; j < gridSize; j++) {
-                usersPerCell[i][j] = random.nextInt(MAX_USERS_PER_CELL);
+        for (Group group : groups)
+            usersPerCell[group.currPos.x][group.currPos.y] += group.size - 1 + random.nextInt(2);
+        for (int i = 0; i < GRID_SIZE; i++) {
+            for (int j = 0; j < GRID_SIZE; j++) {
+                if (usersPerCell[i][j] < 0) usersPerCell[i][j] = 0;
             }
         }
-        usersPerCell[groupPos.get(0)][groupPos.get(1)] += groupSize;
-//        System.out.println("Users Per Cell");
-//        for (int[] line : usersPerCell) {
-//                for (int tile : line) {
-//                    System.out.print(tile + " ");
-//                }
-//                System.out.println();
-//            }
-//            System.out.println("-----------");
+        System.out.println("Users Per Cell");
+        for (int[] line : usersPerCell) {
+                for (int tile : line) {
+                    System.out.print(tile + " ");
+                }
+                System.out.println();
+            }
+            System.out.println("-----------");
         return usersPerCell;
-    }
-
-    private ArrayList<Integer> moveGroup(int secondsLeft, int gridSize,  ArrayList<Integer> currPos) {
-        int posX = 0;
-        int posY = 0;
-
-        if (secondsLeft != 0) {
-            secondsLeft--;
-        }
-        else {
-            // Choose next position
-            ArrayList<ArrayList<Double> > grid = new ArrayList(3);
-            double largestDist = 0;
-            for (int x = 0; x < gridSize; x++) {
-                ArrayList<Double> line = new ArrayList<>();
-                for (int y = 0; y < gridSize; y++) {
-                    double dist = Math.abs(currPos.get(0) - x) + Math.abs(currPos.get(1) - y);
-                    line.add(dist);
-                    if (dist > largestDist) {
-                        largestDist = dist;
-                    }
-                }
-                grid.add(line);
-            }
-
-            double newVal;
-            double totalVal = 0; // this will be used to form the cumulative distribution function
-            for (int x = 0; x < gridSize; x++) {
-                for (int y = 0; y < gridSize; y++) {
-                    double tile = grid.get(x).get(y);
-                    if (tile == 0) {
-                        newVal = 0;
-                    }
-                    else {
-                        newVal = Math.round(largestDist/tile * 100.0) / 100.0;
-                    }
-                    grid.get(x).set(y, newVal);
-                    totalVal += newVal;
-                }
-            }
-
-            // Pick next step with the help of a Gaussian Probability distribution
-            Random rand = new Random();
-            int p;
-            double cumulativeProbability;
-            Boolean selectedNextState = false;
-            while (!selectedNextState) {
-                p = rand.nextInt((int) totalVal);
-                cumulativeProbability = 0;
-                outerLoop:
-                for (int x = 0; x < gridSize; x++) {
-                    for (int y = 0; y < gridSize; y++) {
-                        cumulativeProbability += grid.get(x).get(y);
-                        if (p <= cumulativeProbability && alreadyAccessed[x][y] == 0) {
-//                        System.out.println(totalVal);
-//                        System.out.println(p);
-//                        System.out.println(cumulativeProbability);
-//                        System.out.println(tile);
-//                        System.out.println("-----------");
-//                        System.out.println(x);
-//                        System.out.println(y);
-                            posY = y;
-                            posX = x;
-                            selectedNextState = true;
-                            break outerLoop;
-                        }
-                    }
-                }
-            }
-//            System.out.println();
-//
-//            System.out.println("Already Accessed: ");
-//            for (int[] line : alreadyAccessed) {
-//                for (int tile : line) {
-//                    System.out.print(tile + " ");
-//                }
-//                System.out.println();
-//            }
-//            System.out.println("-----------");
-//
-//            System.out.println("Group's Position:");
-//            for (ArrayList<Double> line : grid) {
-//                for (Double tile : line) {
-////                    System.out.print(tile + " ");
-//                    if (tile == 0.0) System.out.print("X ");
-//                    if (tile != 0.0) System.out.print("0 ");
-//                }
-//                System.out.println();
-//            }
-//            System.out.println("-----------");
-        }
-
-        return new ArrayList<>(Arrays.asList(posX, posY));
     }
 
     private Datacenter createDatacenter(int hosts, int hostPes, int hostPeMips, int hostRam, int hostBw) {
