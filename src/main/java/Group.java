@@ -1,4 +1,6 @@
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Random;
 
 public class Group {
@@ -21,11 +23,9 @@ public class Group {
         this.id = id;
     }
 
-    public void updateAlreadyAccessed() {
-        this.alreadyAccessed[currPos.x][currPos.y] = true;
-    }
+    public void move(boolean createNmmcTransitionMatrix, String historicState, HashMap<String, int[]> transitionsLog, int nmmcHistory, int poi) {
+        this.updateAlreadyAccessed();
 
-    public void move() {
         // Choose next position
         ArrayList<ArrayList<Double> > grid = new ArrayList(this.gridSize);
         double largestDist = 0;
@@ -84,31 +84,41 @@ public class Group {
                 }
             }
         }
-            System.out.println("----------- GROUP: " + this.id + "-----------");
-            System.out.println("Already Accessed: ");
-            for (boolean[] line : this.alreadyAccessed) {
-                for (boolean tile : line) {
-                    if (tile)
-                        System.out.print(1 + " ");
-                    else
-                        System.out.print(0 + " ");
-                }
-                System.out.println();
+        System.out.println("----------- GROUP: " + this.id + " -----------");
+        System.out.println("Already Accessed: ");
+        for (boolean[] line : this.alreadyAccessed) {
+            for (boolean tile : line) {
+                if (tile)
+                    System.out.print(1 + " ");
+                else
+                    System.out.print(0 + " ");
             }
-            System.out.println("-----------");
+            System.out.println();
+        }
 
-            System.out.println("Group's Position:");
-            for (ArrayList<Double> line : grid) {
-                for (Double tile : line) {
-//                    System.out.print(tile + " ");
-                    if (tile == 0.0) System.out.print("X ");
-                    if (tile != 0.0) System.out.print("0 ");
-                }
-                System.out.println();
+        if (createNmmcTransitionMatrix)
+            logTransitions(this.gridSize * this.currPos.x + this.currPos.y,
+                    this.gridSize * this.nextPos.x + this.nextPos.y, historicState, transitionsLog, nmmcHistory, poi);
+
+        this.updatePosition();
+
+        System.out.println("----------- GROUP POSITION -----------");
+        for (int x = 0; x < this.gridSize; x++) {
+            for (int y = 0; y < this.gridSize; y++) {
+                if ((this.currPos.x == x) && (this.currPos.y == y))
+                    System.out.print("X ");
+                else
+                    System.out.print("0 ");
             }
+            System.out.println();
+        }
     }
 
-    public void updatePosition() {
+    private void updateAlreadyAccessed() {
+        this.alreadyAccessed[currPos.x][currPos.y] = true;
+    }
+
+    private void updatePosition() {
         this.currPos = this.nextPos;
         this.howManyVisited++;
 
@@ -118,5 +128,21 @@ public class Group {
             this.alreadyAccessed = new boolean[this.gridSize][this.gridSize];
             this.howManyVisited = 1;
         }
+    }
+
+    private void logTransitions(int prevState, int nextState, String historicState, HashMap<String, int[]> transitionsLog, int nmmcHistory, int poi) {
+        if (historicState.length() > nmmcHistory) historicState = historicState.substring(1); // remove oldest state
+        historicState += Integer.toString(prevState); //concat previous state
+        if (!transitionsLog.containsKey(historicState)) {
+            transitionsLog.put(historicState, new int[poi]); // create the array
+        }
+//        System.out.println("Previous State: " + prevState);
+//        System.out.println("Historic State: " + historicState);
+//        System.out.println("Next State: " + nextState);
+        transitionsLog.get(historicState)[nextState]++;
+        System.out.println("Transition Log: ");
+        transitionsLog.entrySet().forEach(entry -> {
+            System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
+        });
     }
 }

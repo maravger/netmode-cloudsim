@@ -45,8 +45,7 @@ public class JournalSim {
     private static final int APPS = 2;
     private static final int GROUPS = 9;
     private static final int NO_OF_DISTANCES = 1;
-    private static final int MAX_USERS_PER_CELL = 2;
-    private static final int GROUP_SIZE = 8; // [1..10]
+    private static final int GROUP_SIZE = 8; // [1..8]
     private static final int GRID_SIZE = 3;
 
     // Edge Servers related constants
@@ -175,44 +174,43 @@ public class JournalSim {
         // Initial configurations
         if (firstEvent) {
             correctlyCreateVmDescriptions();
+            // Create request rate with somewhat randomly assigned users
+            requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups));
             firstEvent = false;
         }
 
+        // Make sure to call only once per second
         if (!(lastAccessed == (int) evt.getTime())) {
+            // Vm resource usage stats collected per second
             collectVmStats();
 
-            // If a full interval has been completed or first interval, predict group movement, actually move group
-            // and generate request rate per cell
-            if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || ((int) evt.getTime() < SAMPLING_INTERVAL)) {
-                // Predict group movement and random users arrival
+            // If a full interval has been completed or first interval, predict group movement, actually move group,
+            // generate request rate per cell and move group
+            if ((int) evt.getTime() % SAMPLING_INTERVAL == 0) {
+                // Predict group movement and random users arrival // TODO: create prediction
 
 
-                for (Group group : groups) {
-                    // Move group
-                    group.updateAlreadyAccessed();
-                    group.move();
-                    if (CREATE_NMMC_TRANSITION_MATRIX) logTransitions(GRID_SIZE * group.currPos.x + group.currPos.y,
-                            GRID_SIZE * group.nextPos.x + group.nextPos.y);
-                    group.updatePosition();
-                }
-                assignedUsers = createRandomUsers(GRID_SIZE, groups);
-                requestRatePerCell = createRequestRate(assignedUsers);
+                // Move groups
+                for (Group group : groups)
+                    group.move(CREATE_NMMC_TRANSITION_MATRIX, historicState, transitionsLog, NMMC_HISTORY, POI);
 
-                // If a full interval has been completed, gather stats and present them
-                if ((int) evt.getTime() % SAMPLING_INTERVAL == 0) {
-                    // Collect Stats
-                    IntervalStats stats =  collectTaskStats();
-                    int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
-                    int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
-                    double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
-                    csvm.formatAndPrintIntervalStats(vmList, intervalFinishedTasks,
-                            intervalAdmittedTasks, accumulatedResponseTime, accumulatedCpuUtil);
-                    accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
-                    lastIntervalFinishTime = (int) evt.getTime();
-                }
+                // Change request rate based on the groups movement
+                requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups));
+
+                // Collect Stats and present them
+                IntervalStats stats =  collectTaskStats();
+                int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
+                int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
+                double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
+                csvm.formatAndPrintIntervalStats(vmList, intervalFinishedTasks,
+                        intervalAdmittedTasks, accumulatedResponseTime, accumulatedCpuUtil);
+
+                // Initiate interval variables
+                accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
+                lastIntervalFinishTime = (int) evt.getTime();
             }
 
-            // Create requests based on generated request rate
+            // Actually create the requests based on the previously generated request rate
             int app = 0; // TODO: create workload for more than one apps
             if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
 
@@ -452,22 +450,6 @@ public class JournalSim {
         }
     }
 
-    private void logTransitions(int prevState, int nextState) {
-        if (historicState.length() > NMMC_HISTORY) historicState = historicState.substring(1); // remove oldest state
-        historicState += Integer.toString(prevState); //concat previous state
-        if (!transitionsLog.containsKey(historicState)) {
-            transitionsLog.put(historicState, new int[POI]); // create the array
-        }
-//        System.out.println("Previous State: " + prevState);
-//        System.out.println("Historic State: " + historicState);
-//        System.out.println("Next State: " + nextState);
-        transitionsLog.get(historicState)[nextState]++;
-        System.out.println("Transition Log: ");
-        transitionsLog.entrySet().forEach(entry -> {
-            System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
-        });
-    }
-
     private void generateRequests(double[][] requestRatePerCell, EventInfo evt, int app) {
         PoissonDistribution pD;
         int tasksToCreate, poi;
@@ -516,8 +498,11 @@ public class JournalSim {
         Random random = new Random();
         int[][] usersPerCell = new int[gridSize][gridSize];
 
-        for (Group group : groups)
+        for (Group group : groups) {
+//            System.out.println("Group Size: " + group.size);
             usersPerCell[group.currPos.x][group.currPos.y] += group.size - 1 + random.nextInt(2);
+//            System.out.println("Users in this cel: " + usersPerCell[group.currPos.x][group.currPos.y]);
+        }
         for (int i = 0; i < GRID_SIZE; i++) {
             for (int j = 0; j < GRID_SIZE; j++) {
                 if (usersPerCell[i][j] < 0) usersPerCell[i][j] = 0;
