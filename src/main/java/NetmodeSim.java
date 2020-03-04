@@ -26,7 +26,7 @@ import org.cloudsimplus.listeners.EventInfo;
 import java.util.*;
 import java.util.stream.IntStream;
 
-public class JournalSim {
+public class NetmodeSim {
     // TODO: read these values from external file
     // TODO: set debugging toggle and different colors
     // TODO: do not use constants in methods; add them to method call
@@ -80,68 +80,40 @@ public class JournalSim {
     private int lastIntervalFinishTime;
     private HashMap<String, int[]> transitionsLog;
     private HashMap<String, double[]> transitionProbabilitiesMap;
-    private String historicState;
     private double[][] requestRatePerCell;
     private Boolean firstEvent;
     private CSVmachine csvm;
     private Group[] groups;
 
     public static void main(String[] args) {
-        new JournalSim();
+        new NetmodeSim();
     }
 
-    public JournalSim() {
+    public NetmodeSim() {
         csvm = new CSVmachine(POI, APPS, SAMPLING_INTERVAL);
 
-        groups = new Group[GROUPS];
-        edgeBroker = new DatacenterBrokerSimpleExtended[POI];
+        transitionsLog = new HashMap<>();
         vmList = (ArrayList<Vm>[][]) new ArrayList[POI][APPS];
         taskList = (ArrayList<TaskSimple>[][]) new ArrayList[POI][APPS];
         taskCounter = new int[POI][APPS];
 
         simData = csvm.readSimCSVData();
         firstEvent = true;
-        historicState = "";
 
         // Create groups with random starting position
-        for (int group = 0; group < GROUPS; group++) {
-            Random rand = new Random();
-            int size = rand.nextInt(GROUP_SIZE);
-            int app = rand.nextInt(APPS);
-            Coordinates currPos = new Coordinates(rand.nextInt(GRID_SIZE), rand.nextInt(GRID_SIZE));
-            groups[group] = new Group(group, size, app, currPos, GRID_SIZE);
-        }
+        createGroups(GROUPS, GROUP_SIZE, APPS, GRID_SIZE);
 
         // Add one broker and one datacenter per Point of Interest
-        for (int poi = 0; poi < POI; poi++) {
-            Set<Datacenter> edgeDCList = new HashSet<>();
-            Datacenter dc = createDatacenter(EDGE_HOSTS, EDGE_HOST_PES, EDGE_HOST_PE_MIPS, EDGE_HOST_RAM, EDGE_HOST_BW);
-            dc.setName("DataCenter" + poi);
-            edgeDCList.add(dc);
-            edgeBroker[poi] = new DatacenterBrokerSimpleExtended(simulation);
-            edgeBroker[poi].setName("AccessPoint" + poi);
-            edgeBroker[poi].setDatacenterList(edgeDCList);
-        }
+        createBrokersAndDatacenters(POI);
 
         // Create number of initial VMs for each app
-        int flavor = 2;
-        int noOfVms = 1; // per app
-        for (int poi = 0; poi < POI; poi++) {
-            ArrayList<Vm> tempVmList = new ArrayList();
-            for (int app = 0; app < APPS; app++) {
-                vmList[poi][app] = createVms(noOfVms, poi, app, flavor);
-                tempVmList.addAll(vmList[poi][app]);
-                if (vmList[poi][app].size() > maxVmSize) maxVmSize = vmList[poi][app].size();
-            }
-            edgeBroker[poi].submitVmList(tempVmList);
-        }
+        spawnVms();
 
         // Initialize stat-gathering lists
         accumulatedCpuUtil = new double[POI][APPS][maxVmSize]; // TODO (1): reallocate it in every interval taking the number of VMs
                                                                 // TODO (2):  of the Cloudlets into consideration;
 
-        transitionsLog = new HashMap<>();
-        // TODO: use transition probabilities map to predict incoming workload
+        // Initialize transition probabilities to use for group movement prediction (mobility)
         if (!CREATE_NMMC_TRANSITION_MATRIX) {
             transitionProbabilitiesMap = csvm.readNMMCTransitionMatrixCSV();
 //            System.out.println("Transition Probabilities Map: ");
@@ -151,16 +123,6 @@ public class JournalSim {
         }
 
         runSimulationAndPrintResults();
-//        int[][] flavorCores = {{1, 2, 4}, {1, 2, 4}};
-//        ArrayList<int[][]> feasibleFormations = calculateFeasibleServerFormations(4, flavorCores);
-//        double[][] guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
-//        double[] energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
-//        double[][] predictedWorkload = {{50, 100}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400},
-//                {200, 400}, {200, 400}};
-//        ArrayList<Integer>[] vmPlacement = optimizeVmPlacement(feasibleFormations, guaranteedWorkload, energyConsumption,
-//                3, predictedWorkload, 4, 0.5);
-//        calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
-//        calculateResidualResources(vmPlacement, 3);
 
         System.out.println(getClass().getSimpleName() + " finished!");
         if (CREATE_NMMC_TRANSITION_MATRIX) csvm.createNMMCTransitionMatrixCSV(transitionsLog);
@@ -168,12 +130,11 @@ public class JournalSim {
 
     // Take decisions with a second-wise granularity
     private void masterOfPuppets(final EventInfo evt) {
-//        System.out.println((int)evt.getTime());
         int[][] assignedUsers;
 
         // Initial configurations
         if (firstEvent) {
-            correctlyCreateVmDescriptions();
+            correctlySetVmDescriptions();
             // Create request rate with somewhat randomly assigned users
             requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups));
             firstEvent = false;
@@ -184,15 +145,30 @@ public class JournalSim {
             // Vm resource usage stats collected per second
             collectVmStats();
 
-            // If a full interval has been completed or first interval, predict group movement, actually move group,
-            // generate request rate per cell and move group
+            // If a full interval has been completed or first interval, predict group movement, optimize vm placement,
+            // actually move group, generate request rate per cell
             if ((int) evt.getTime() % SAMPLING_INTERVAL == 0) {
-                // Predict group movement and random users arrival // TODO: create prediction
+                // Predict group movement and random users arrival //
+                double[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
 
+                // Translate predicted users per cell to workload
+
+
+                // Optimize VM placement and actually allocate VMs
+//                int[][] flavorCores = {{1, 2, 4}, {1, 2, 4}};
+//                ArrayList<int[][]> feasibleFormations = calculateFeasibleServerFormations(4, flavorCores);
+//                double[][] guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
+//                double[] energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
+//                double[][] predictedWorkload = {{50, 100}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400},
+//                        {200, 400}, {200, 400}};
+//                ArrayList<Integer>[] vmPlacement = optimizeVmPlacement(feasibleFormations, guaranteedWorkload, energyConsumption,
+//                        3, predictedWorkload, 4, 0.5);
+//                calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
+//                calculateResidualResources(vmPlacement, 3);
 
                 // Move groups
                 for (Group group : groups)
-                    group.move(CREATE_NMMC_TRANSITION_MATRIX, historicState, transitionsLog, NMMC_HISTORY, POI);
+                    group.move(transitionsLog, POI);
 
                 // Change request rate based on the groups movement
                 requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups));
@@ -210,12 +186,36 @@ public class JournalSim {
                 lastIntervalFinishTime = (int) evt.getTime();
             }
 
-            // Actually create the requests based on the previously generated request rate
+            // Actually create the requests based on the previously generated request rate and delegate them per VM/app
             int app = 0; // TODO: create workload for more than one apps
             if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
 
             lastAccessed = (int) evt.getTime();
         }
+    }
+
+    private double[][] predictNextIntervalUsers(Group[] groups, HashMap<String, double[]> transitionProbabilitiesMap) {
+        double[] transitionProbabilities;
+        double[][] predictedUsersPerCellPerApp = new double[POI][APPS];
+
+        for (Group group : groups) {
+            transitionProbabilities = transitionProbabilitiesMap.get(group.historicState);
+            if (transitionProbabilities == null) {
+                transitionProbabilities = new double[POI];
+                for (int i = 0; i < POI; i++)
+                    transitionProbabilities[i] = 1.0 / POI;
+            }
+//            System.out.println("Historic state: " + group.historicState);
+//            System.out.println("Transition Probabilites: " + Arrays.toString(transitionProbabilities));
+//            System.out.println("Group Size: " + group.size);
+            for (int i = 0; i < transitionProbabilities.length; i++) {
+                predictedUsersPerCellPerApp[i][group.app] += group.size * transitionProbabilities[i];
+//                System.out.println("POI " + i + " Group Predicted Users: " + group.size * transitionProbabilities[i]);
+            }
+//            System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
+        }
+
+        return predictedUsersPerCellPerApp;
     }
 
     private double[][] calculateResidualWorkload(ArrayList<Integer>[] vmPlacement, double[][] guaranteedWorkload,
@@ -439,7 +439,7 @@ public class JournalSim {
         return new IntervalStats(intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime);
     }
 
-    private void correctlyCreateVmDescriptions() {
+    private void correctlySetVmDescriptions() {
         for (int poi = 0; poi < POI; poi++) {
             for (int app = 0; app < APPS; app++) {
                 for (int vmi = 0; vmi < vmList[poi][app].size(); vmi++) {
@@ -594,6 +594,44 @@ public class JournalSim {
         }
 
         return tempTaskList;
+    }
+
+    private void createGroups(int howManyGroups, int groupSize, int apps, int gridSize) {
+        groups = new Group[howManyGroups];
+        for (int group = 0; group < howManyGroups; group++) {
+            Random rand = new Random();
+            int size = rand.nextInt(groupSize);
+            int app = rand.nextInt(apps);
+            Coordinates currPos = new Coordinates(rand.nextInt(gridSize), rand.nextInt(gridSize));
+            groups[group] = new Group(group, size, app, currPos, gridSize, NMMC_HISTORY);
+        }
+    }
+
+    private void createBrokersAndDatacenters(int pois) {
+        edgeBroker = new DatacenterBrokerSimpleExtended[pois];
+        for (int poi = 0; poi < pois; poi++) {
+            Set<Datacenter> edgeDCList = new HashSet<>();
+            Datacenter dc = createDatacenter(EDGE_HOSTS, EDGE_HOST_PES, EDGE_HOST_PE_MIPS, EDGE_HOST_RAM, EDGE_HOST_BW);
+            dc.setName("DataCenter" + poi);
+            edgeDCList.add(dc);
+            edgeBroker[poi] = new DatacenterBrokerSimpleExtended(simulation);
+            edgeBroker[poi].setName("AccessPoint" + poi);
+            edgeBroker[poi].setDatacenterList(edgeDCList);
+        }
+    }
+
+    private void spawnVms() {
+        int flavor = 2;
+        int noOfVms = 1; // per app
+        for (int poi = 0; poi < POI; poi++) {
+            ArrayList<Vm> tempVmList = new ArrayList();
+            for (int app = 0; app < APPS; app++) {
+                vmList[poi][app] = createVms(noOfVms, poi, app, flavor);
+                tempVmList.addAll(vmList[poi][app]);
+                if (vmList[poi][app].size() > maxVmSize) maxVmSize = vmList[poi][app].size();
+            }
+            edgeBroker[poi].submitVmList(tempVmList);
+        }
     }
 
     private void runSimulationAndPrintResults() {
