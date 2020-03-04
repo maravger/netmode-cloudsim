@@ -66,6 +66,7 @@ public class NetmodeSim {
     // Task related constants
     private static final int TASK_PES = 1;
     private static final int TASK_LENGTH = 1000;
+    private static final double[] APP_REQUEST_RATE_PER_USER = {10, 20};
 
     // Various "global" variables
     private Double[][] simData;
@@ -152,7 +153,7 @@ public class NetmodeSim {
                 double[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
 
                 // Translate predicted users per cell to workload
-
+                double[][] predictedWorkload = predictNextIntervalWorkload(predictedUsersPerCellPerApp, APP_REQUEST_RATE_PER_USER);
 
                 // Optimize VM placement and actually allocate VMs
 //                int[][] flavorCores = {{1, 2, 4}, {1, 2, 4}};
@@ -193,7 +194,7 @@ public class NetmodeSim {
             lastAccessed = (int) evt.getTime();
         }
     }
-
+    
     private double[][] predictNextIntervalUsers(Group[] groups, HashMap<String, double[]> transitionProbabilitiesMap) {
         double[] transitionProbabilities;
         double[][] predictedUsersPerCellPerApp = new double[POI][APPS];
@@ -212,10 +213,21 @@ public class NetmodeSim {
                 predictedUsersPerCellPerApp[i][group.app] += group.size * transitionProbabilities[i];
 //                System.out.println("POI " + i + " Group Predicted Users: " + group.size * transitionProbabilities[i]);
             }
-//            System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
+            System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
         }
 
         return predictedUsersPerCellPerApp;
+    }
+
+    private double[][] predictNextIntervalWorkload(double[][] predictedUsersPerCellPerApp, double[] appRequestRatePerUser) {
+        double[][] predictedIntervalWorkload = new double[POI][APPS];
+
+        for (int i = 0; i < predictedUsersPerCellPerApp.length; i++)
+            for (int app = 0; app < APPS; app++)
+                predictedIntervalWorkload[i][app] = predictedUsersPerCellPerApp[i][app] * appRequestRatePerUser[app];
+
+        System.out.println("Total Predicted Workload: " + Arrays.deepToString(predictedIntervalWorkload));
+        return predictedIntervalWorkload;
     }
 
     private double[][] calculateResidualWorkload(ArrayList<Integer>[] vmPlacement, double[][] guaranteedWorkload,
