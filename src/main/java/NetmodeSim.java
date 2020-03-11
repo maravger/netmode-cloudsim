@@ -29,7 +29,7 @@ import java.util.stream.IntStream;
 public class NetmodeSim {
     // TODO: read these values from external file
     // TODO: set debugging toggle and different colors
-    // TODO: do not use constants in methods; add them to method call
+    // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
     private static final double TIME_TO_TERMINATE_SIMULATION = 360;
@@ -43,30 +43,31 @@ public class NetmodeSim {
     // Environment related constants
     private static final int POI = 9; //define points of interest
     private static final int APPS = 2;
-    private static final int GROUPS = 9;
-    private static final int NO_OF_DISTANCES = 1;
-    private static final int GROUP_SIZE = 8; // [1..8]
+    private static final int GROUPS = 20;
+    private static final int GROUP_SIZE = 4; // [1..4]
     private static final int GRID_SIZE = 3;
 
     // Edge Servers related constants
-    private static final int EDGE_HOSTS = 1;
-    private static final int EDGE_HOST_PES = 16;
+    private static final int EDGE_HOSTS = 3;
+    private static final int EDGE_HOST_PES = 4;
     private static final int EDGE_HOST_PE_MIPS = 2000;
     private static final int EDGE_HOST_RAM = 64768;
     private static final int EDGE_HOST_BW = 1000000;
 
     // VM related constants
-    private static final int[][] VM_PES = {{1, 2, 4}, {1, 2, 4}, {1, 2, 4}}; // [app][flavor]
-    private static final int[][] VM_PE_MIPS = {{2000, 2000, 2000}, {2000, 2000, 2000}, {2000, 2000, 2000}};
-    private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}};
-    private static final double[][] VM_GUARANTEED_MAX_RR = {{50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}};
+    private static final int[][] VM_PES = {{1, 2, 4}, {1, 2, 4}}; // [app][flavor]
+    private static final int[][] VM_PE_MIPS = {{2000, 2000, 2000}, {2000, 2000, 2000}};
+    private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}};
+    private static final double[][] VM_GUARANTEED_MAX_RR = {{50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}};
     private static final int VM_RAM = 4096;
     private static final int VM_BW = 200000;
+    private static final double UNDERUTILISED_VM_CUTOFF = 0.5;
 
     // Task related constants
     private static final int TASK_PES = 1;
     private static final int TASK_LENGTH = 1000;
-    private static final double[] APP_REQUEST_RATE_PER_USER = {10, 20};
+    private static final double[] APP_REQUEST_RATE_PER_USER = {3, 7}; // needed in order to make a sound translation
+    private static final int[][] CELL_OFFLOADING_DISTANCE_INDEX = {{1, 1, 4}, {3, 1, 2}, {4, 4, 2}};
 
     // Various "global" variables
     private Double[][] simData;
@@ -85,6 +86,9 @@ public class NetmodeSim {
     private Boolean firstEvent;
     private CSVmachine csvm;
     private Group[] groups;
+    private ArrayList<int[][]> feasibleFormations;
+    private double[][] guaranteedWorkload;
+    private double[] energyConsumption;
 
     public static void main(String[] args) {
         new NetmodeSim();
@@ -107,13 +111,6 @@ public class NetmodeSim {
         // Add one broker and one datacenter per Point of Interest
         createBrokersAndDatacenters(POI);
 
-        // Create number of initial VMs for each app
-        spawnVms();
-
-        // Initialize stat-gathering lists
-        accumulatedCpuUtil = new double[POI][APPS][maxVmSize]; // TODO (1): reallocate it in every interval taking the number of VMs
-                                                                // TODO (2):  of the Cloudlets into consideration;
-
         // Initialize transition probabilities to use for group movement prediction (mobility)
         if (!CREATE_NMMC_TRANSITION_MATRIX) {
             transitionProbabilitiesMap = csvm.readNMMCTransitionMatrixCSV();
@@ -122,6 +119,22 @@ public class NetmodeSim {
 //                System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
 //            });
         }
+
+        // Calculate variables required for VM optimization
+        feasibleFormations = calculateFeasibleServerFormations(EDGE_HOST_PES, VM_PES);
+        guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
+        energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
+
+        // Initial Predicted Workload TODO: change
+        double [][] predictedWorkload = {{100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}};
+        ArrayList<Integer>[] vmPlacement =
+                optimizeVmPlacement(EDGE_HOSTS, predictedWorkload, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
+
+        // Create number of initial VMs for each app
+        spawnVms(feasibleFormations, vmPlacement);
+        // Initialize stat-gathering lists
+        // TODO (1): reallocate it in every interval taking the number of VMs of the Cloudlets into consideration;
+        accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
 
         runSimulationAndPrintResults();
 
@@ -133,71 +146,71 @@ public class NetmodeSim {
     private void masterOfPuppets(final EventInfo evt) {
         int[][] assignedUsers;
 
-        // Initial configurations
-        if (firstEvent) {
-            correctlySetVmDescriptions();
-            // Create request rate with somewhat randomly assigned users
-            requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups));
-            firstEvent = false;
-        }
-
         // Make sure to call only once per second
         if (!(lastAccessed == (int) evt.getTime())) {
+            // Initial configurations
+//            if (firstEvent) correctlySetVmDescriptions();
+            correctlySetVmDescriptions();
+
             // Vm resource usage stats collected per second
             collectVmStats();
 
             // If a full interval has been completed or first interval, predict group movement, optimize vm placement,
             // actually move group, generate request rate per cell
-            if ((int) evt.getTime() % SAMPLING_INTERVAL == 0) {
+            if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || firstEvent) {
                 // Predict group movement and random users arrival //
-                double[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
+                int[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
 
                 // Translate predicted users per cell to workload
-                double[][] predictedWorkload = predictNextIntervalWorkload(predictedUsersPerCellPerApp, APP_REQUEST_RATE_PER_USER);
+                double[][] predictedWorkload =
+                        predictNextIntervalWorkload(predictedUsersPerCellPerApp, APP_REQUEST_RATE_PER_USER);
 
-                // Optimize VM placement and actually allocate VMs
-//                int[][] flavorCores = {{1, 2, 4}, {1, 2, 4}};
-//                ArrayList<int[][]> feasibleFormations = calculateFeasibleServerFormations(4, flavorCores);
-//                double[][] guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
-//                double[] energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
-//                double[][] predictedWorkload = {{50, 100}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400}, {200, 400},
-//                        {200, 400}, {200, 400}};
-//                ArrayList<Integer>[] vmPlacement = optimizeVmPlacement(feasibleFormations, guaranteedWorkload, energyConsumption,
-//                        3, predictedWorkload, 4, 0.5);
-//                calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
-//                calculateResidualResources(vmPlacement, 3);
+                // Optimize VM placement based on energy consumption and guaranteed workload completion,
+                // actually allocate VMs and perform MRF
+                ArrayList<Integer>[] vmPlacement =
+                        optimizeVmPlacement(EDGE_HOSTS, predictedWorkload, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
+                calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
+                calculateResidualResources(vmPlacement, EDGE_HOSTS);
+
+                // MRF step TODO
+                spawnVms(feasibleFormations, vmPlacement);
 
                 // Move groups
                 for (Group group : groups)
                     group.move(transitionsLog, POI);
 
                 // Change request rate based on the groups movement
-                requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups));
+                requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups), APP_REQUEST_RATE_PER_USER);
 
-                // Collect Stats and present them
-                IntervalStats stats =  collectTaskStats();
-                int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
-                int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
-                double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
-                csvm.formatAndPrintIntervalStats(vmList, intervalFinishedTasks,
-                        intervalAdmittedTasks, accumulatedResponseTime, accumulatedCpuUtil);
+                if (!firstEvent) {
+                    // Collect Stats and present them
+                    IntervalStats stats = collectTaskStats();
+                    int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
+                    int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
+                    double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
+                    csvm.formatAndPrintIntervalStats(vmList, intervalFinishedTasks,
+                            intervalAdmittedTasks, accumulatedResponseTime, accumulatedCpuUtil);
 
-                // Initiate interval variables
-                accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
-                lastIntervalFinishTime = (int) evt.getTime();
+                    // Initiate interval variables
+                    accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
+                    lastIntervalFinishTime = (int) evt.getTime();
+                }
+
+                // First interval arrangements are now over
+                if (firstEvent) firstEvent = false;
             }
 
             // Actually create the requests based on the previously generated request rate and delegate them per VM/app
             int app = 0; // TODO: create workload for more than one apps
-            if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
+//            if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
 
             lastAccessed = (int) evt.getTime();
         }
     }
-    
-    private double[][] predictNextIntervalUsers(Group[] groups, HashMap<String, double[]> transitionProbabilitiesMap) {
+
+    private int[][] predictNextIntervalUsers(Group[] groups, HashMap<String, double[]> transitionProbabilitiesMap) {
         double[] transitionProbabilities;
-        double[][] predictedUsersPerCellPerApp = new double[POI][APPS];
+        int[][] predictedUsersPerCellPerApp = new int[POI][APPS];
 
         for (Group group : groups) {
             transitionProbabilities = transitionProbabilitiesMap.get(group.historicState);
@@ -210,21 +223,29 @@ public class NetmodeSim {
 //            System.out.println("Transition Probabilites: " + Arrays.toString(transitionProbabilities));
 //            System.out.println("Group Size: " + group.size);
             for (int i = 0; i < transitionProbabilities.length; i++) {
-                predictedUsersPerCellPerApp[i][group.app] += group.size * transitionProbabilities[i];
+                // TODO maybe add +1 to predicted users
+                predictedUsersPerCellPerApp[i][group.app] += Math.round(group.size * transitionProbabilities[i]);
 //                System.out.println("POI " + i + " Group Predicted Users: " + group.size * transitionProbabilities[i]);
             }
-            System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
+//            System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
         }
 
         return predictedUsersPerCellPerApp;
     }
 
-    private double[][] predictNextIntervalWorkload(double[][] predictedUsersPerCellPerApp, double[] appRequestRatePerUser) {
+    private double[][] predictNextIntervalWorkload(int[][] predictedUsersPerCellPerApp, double[] appRequestRatePerUser) {
         double[][] predictedIntervalWorkload = new double[POI][APPS];
 
-        for (int i = 0; i < predictedUsersPerCellPerApp.length; i++)
-            for (int app = 0; app < APPS; app++)
-                predictedIntervalWorkload[i][app] = predictedUsersPerCellPerApp[i][app] * appRequestRatePerUser[app];
+        for (int i = 0; i < predictedUsersPerCellPerApp.length; i++) {
+            for (int app = 0; app < APPS; app++) {
+                int distance = CELL_OFFLOADING_DISTANCE_INDEX[i / GRID_SIZE][i % GRID_SIZE];
+                if (predictedUsersPerCellPerApp[i][app] != 0)
+                    predictedIntervalWorkload[i][app] =
+                            simData[(predictedUsersPerCellPerApp[i][app] * distance) - 1][12] * appRequestRatePerUser[app];
+                else
+                    predictedIntervalWorkload[i][app] = 0;
+            }
+        }
 
         System.out.println("Total Predicted Workload: " + Arrays.deepToString(predictedIntervalWorkload));
         return predictedIntervalWorkload;
@@ -269,9 +290,8 @@ public class NetmodeSim {
         return residualResources;
     }
 
-    private ArrayList<Integer>[] optimizeVmPlacement(ArrayList<int[][]> feasibleFormations, double[][] guaranteedWorkload,
-                                                     double[] energyConsumption, int hosts, double[][] predictedWorkload,
-                                                     int edgeHostPes, double cutOffPoint) {
+    private ArrayList<Integer>[] optimizeVmPlacement(int hosts, double[][] predictedWorkload, int edgeHostPes, double cutOffPoint) {
+        ArrayList<Integer>[] tempVmPlacement = new ArrayList[POI];
         ArrayList<Integer>[] vmPlacement = new ArrayList[POI];
 
         // Solve lp optimization
@@ -279,22 +299,28 @@ public class NetmodeSim {
 //            System.out.println(Arrays.deepToString(guaranteedWorkload));
 //            System.out.println(Arrays.toString(energyConsumption));
             try {
-                vmPlacement[poi] = Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, hosts, predictedWorkload[poi]);
+                tempVmPlacement[poi] =
+                        Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, hosts, predictedWorkload[poi]);
             } catch (LpSolveException e) {
                 e.printStackTrace();
             }
         }
-//        System.out.println("\n\n" + Arrays.deepToString(vmPlacement));
+        System.out.println("\n\n" + Arrays.deepToString(tempVmPlacement));
 
         // Cut out "underutilised" servers. Underutilisation criteria = less than 50% of the cores allocated
-        for (ArrayList<Integer> site : vmPlacement) {
-            for (int server : site) {
+        int poi = 0;
+        for (ArrayList<Integer> tempSite : tempVmPlacement) {
+            ArrayList<Integer> site = new ArrayList<>(tempSite);
+            for (int server : tempSite) {
                 int serverCoreSum = 0;
-                for (int app = 0; app < APPS; app++) serverCoreSum += IntStream.of(feasibleFormations.get(server)[app]).sum();
+                for (int app = 0; app < APPS; app++)
+                    serverCoreSum += IntStream.of(feasibleFormations.get(server)[app]).sum();
 //                System.out.println(serverCoreSum);
-
+                // throws java.util.ConcurrentModificationException if modifying the iterated array. Thus use tempSite
                 if ((serverCoreSum / (double) edgeHostPes) <= cutOffPoint) site.remove(server);
             }
+            vmPlacement[poi] = site;
+            poi++;
         }
         System.out.println("Vm Placement: " + Arrays.deepToString(vmPlacement));
 
@@ -328,9 +354,13 @@ public class NetmodeSim {
         for (int permutation = 0; permutation < totalFormations; permutation++) {
 //            System.out.println(Arrays.deepToString(feasibleFormations.get(permutation)));
             for (int app = 0; app < APPS; app++) {
-                for (int flavor : feasibleFormations.get(permutation)[app]) {
-//                    System.out.println(ArrayUtils.indexOf(VM_PES[app], flavor));
-                    energyConsumption[permutation] += calculateVmPowerConsumption(serverCores, VM_PES[app][flavor], k, pMax);
+                for (int flavorCores : feasibleFormations.get(permutation)[app]) {
+//                    System.out.println(flavorCores);
+//                    System.out.println(ArrayUtils.indexOf(VM_PES[app], flavorCores));
+                    // Use Energy Model defined in paper to predict the power consumed by each VM provisioned
+                    // in a server with an error below 5%
+                    energyConsumption[permutation] +=
+                            calculateVmPowerConsumption(serverCores, ArrayUtils.indexOf(VM_PES[app], flavorCores), k, pMax);
 //                    System.out.println(energyConsumption[permutation]);
                 }
             }
@@ -341,7 +371,6 @@ public class NetmodeSim {
         return energyConsumption;
     }
 
-    // Use Energy Model defined in paper to predict the power consumed by each VM provisioned in a server with an error below 5%
     private double calculateVmPowerConsumption(int serverCores, int vmCores, double k, double pMax) {
         return k * pMax + ((1 - k) * pMax * vmCores / serverCores);
     }
@@ -473,30 +502,43 @@ public class NetmodeSim {
                     pD = new PoissonDistribution(requestRatePerCell[i][j] / SAMPLING_INTERVAL);
                     tasksToCreate = pD.sample();
                     taskList[poi][app] = new ArrayList<>();
-                    System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n", tasksToCreate, poi, app, evt.getTime());
+                    System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n",
+                            tasksToCreate, poi, app, evt.getTime());
                     taskList[poi][app] = (ArrayList<TaskSimple>) createTasks(tasksToCreate, poi, app, 0);
-                    edgeBroker[poi].submitCloudletList(taskList[poi][app], vmList[poi][app].get(0)); // TODO make app selection + load balancing
+                    // TODO make app selection + load balancing
+                    // TODO: allocate tasks to Hosts and subsequently VMs based on their size. Create a mechanism on this
+                    Random rand = new Random();
+                    int host = rand.nextInt(2);
+//                    int vmId = 0;
+                    int vmId = rand.nextInt(vmList[poi][app].size());
+                    System.out.println("VM: " + vmId);
+//                    poi * 1000 + host * 100 + app * 10 + vmId
+                    edgeBroker[poi].submitCloudletList(taskList[poi][app], vmList[poi][app].get(vmId));
+                    System.out.println("Submitting requests to vm: " + vmList[poi][app].get(vmId).getId());
                 }
                 else {
-                    System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n", 0, poi, app, evt.getTime());
+                    System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n", 0,
+                            poi, app, evt.getTime());
                 }
             }
         }
     }
 
-    private double[][] createRequestRate(int[][] assignedUsers) {
+    private double[][] createRequestRate(int[][][] assignedUsers, double[] appRequestRatePerUser) {
         double[][] requestRatePerCell = new double[GRID_SIZE][GRID_SIZE];
-        Random random = new Random(); // randomize distance from cell
-        int distance;
 
         for (int i = 0; i < GRID_SIZE; i++) {
             for (int j = 0; j < GRID_SIZE; j++) {
-                if (assignedUsers[i][j] != 0) {
-                    distance = random.nextInt(NO_OF_DISTANCES) + 1;
-                    requestRatePerCell[i][j] = simData[(assignedUsers[i][j] * distance) - 1][12];
-                }
-                else {
-                    requestRatePerCell[i][j] = 0;
+                for (int app = 0; app < APPS; app++) {
+                    if (assignedUsers[i][j][app] != 0) {
+                        int distance = CELL_OFFLOADING_DISTANCE_INDEX[i][j];
+                        System.out.println("Distance: " + distance);
+                        System.out.println("Assigned Users: " + assignedUsers[i][j][app]);
+                        requestRatePerCell[i][j] =
+                                simData[(assignedUsers[i][j][app] * distance) - 1][12] * appRequestRatePerUser[app];
+                    } else {
+                        requestRatePerCell[i][j] = 0;
+                    }
                 }
             }
         }
@@ -506,28 +548,33 @@ public class NetmodeSim {
         return requestRatePerCell;
     }
 
-    private int[][] createRandomUsers(int gridSize, Group[] groups) {
+    private int[][][] createRandomUsers(int gridSize, Group[] groups) {
         Random random = new Random();
-        int[][] usersPerCell = new int[gridSize][gridSize];
+        int[][][] usersPerCell = new int[gridSize][gridSize][APPS];
 
         for (Group group : groups) {
 //            System.out.println("Group Size: " + group.size);
-            usersPerCell[group.currPos.x][group.currPos.y] += group.size - 1 + random.nextInt(2);
+            usersPerCell[group.currPos.x][group.currPos.y][group.app] += group.size - 1 + random.nextInt(2);
 //            System.out.println("Users in this cel: " + usersPerCell[group.currPos.x][group.currPos.y]);
         }
+
         for (int i = 0; i < GRID_SIZE; i++) {
             for (int j = 0; j < GRID_SIZE; j++) {
-                if (usersPerCell[i][j] < 0) usersPerCell[i][j] = 0;
+                for (int app = 0; app < APPS; app++) {
+                    if (usersPerCell[i][j][app] < 0) usersPerCell[i][j][app] = 0;
+                }
             }
         }
+
         System.out.println("Users Per Cell");
-        for (int[] line : usersPerCell) {
-                for (int tile : line) {
-                    System.out.print(tile + " ");
+        for (int[][] line : usersPerCell) {
+                for (int[] tile : line) {
+                    System.out.print(Arrays.toString(tile) + " ");
                 }
                 System.out.println();
             }
             System.out.println("-----------");
+
         return usersPerCell;
     }
 
@@ -546,9 +593,9 @@ public class NetmodeSim {
 
     private Host createHost(int hostPes, int hostPeMips, int hostRam, int hostBw) {
         final List<Pe> peList = new ArrayList<>(hostPes);
-        //List of Host's CPUs (Processing Elements, PEs)
+        // List of Host's CPUs (Processing Elements, PEs)
         for (int i = 0; i < hostPes; i++) {
-            //Uses a PeProvisionerSimple by default to provision PEs for VMs
+            // Uses a PeProvisionerSimple by default to provision PEs for VMs
             peList.add(new PeSimple(hostPeMips));
         }
 
@@ -567,25 +614,27 @@ public class NetmodeSim {
         return host;
     }
 
-    private ArrayList<Vm> createVms(int noOfVms, int exhibit, int app, int flavor) {
-        int vm_pes = VM_PES[app][flavor - 1];
-        int vm_pe_mips = VM_PE_MIPS[app][flavor - 1];
+    private ArrayList<Vm> createVms(int noOfVms, int poi, int app, int flavor, int host, int vmId) {
+        int vm_pes = VM_PES[app][flavor];
+        int vm_pe_mips = VM_PE_MIPS[app][flavor];
         int vm_ram = VM_RAM;
         int vm_bw = VM_BW;
         final ArrayList<Vm> list = new ArrayList<>(noOfVms);
         for (int i = 0; i < noOfVms; i++) {
             //Uses a CloudletSchedulerTimeShared by default to schedule Cloudlets
             final Vm vm = new VmSimple(vm_pe_mips, vm_pes);
-            vm.setId(exhibit * 10 + app);
+            vm.setId(poi * 1000 + host * 100 + app * 10 + vmId);
             vm.setRam(vm_ram).setBw(vm_bw).setSize(1000);
             // Description contains application id
             vm.setDescription(Integer.toString(app));
+//            vm.setHost(edgeBroker[poi].getDatacenterList().get(0).getHost(host)); // Only one datacenter per POI
+//            vm.setHost(edgeBroker[poi].getDatacenterList().get(0).getHost(0)); // Only one datacenter per POI
             list.add(vm);
         }
         return list;
     }
 
-    private List<TaskSimple> createTasks(int noOfTasks, int exhibit, int app, int interArrivalTime) {
+    private List<TaskSimple> createTasks(int noOfTasks, int poi, int app, int interArrivalTime) {
         final List<TaskSimple> tempTaskList = new ArrayList<>(noOfTasks);
 
         //UtilizationModel defining the Tasks use up to 90% of any resource all the time
@@ -596,13 +645,13 @@ public class NetmodeSim {
             final TaskSimple task = new TaskSimple(TASK_LENGTH, TASK_PES, utilizationModel);
             task.setUtilizationModelRam(UtilizationModel.NULL); // TODO: reconsider if we care about RAM and BW Utilization
             task.setUtilizationModelBw(UtilizationModel.NULL);
-            task.setId(Long.parseLong((exhibit * 10 + app) + Integer.toString(taskCounter[exhibit][app])));
+            task.setId(Long.parseLong((poi * 10 + app) + Integer.toString(taskCounter[poi][app])));
             task.setSizes(1024);
             task.setSubmissionDelay(submissionDelay);
-            task.setBroker(edgeBroker[exhibit]);
+            task.setBroker(edgeBroker[poi]);
             tempTaskList.add(task);
             submissionDelay += interArrivalTime;
-            taskCounter[exhibit][app]++;
+            taskCounter[poi][app]++;
         }
 
         return tempTaskList;
@@ -612,7 +661,7 @@ public class NetmodeSim {
         groups = new Group[howManyGroups];
         for (int group = 0; group < howManyGroups; group++) {
             Random rand = new Random();
-            int size = rand.nextInt(groupSize);
+            int size = 1 + rand.nextInt(groupSize);
             int app = rand.nextInt(apps);
             Coordinates currPos = new Coordinates(rand.nextInt(gridSize), rand.nextInt(gridSize));
             groups[group] = new Group(group, size, app, currPos, gridSize, NMMC_HISTORY);
@@ -632,13 +681,59 @@ public class NetmodeSim {
         }
     }
 
-    private void spawnVms() {
+    private void destroyVms() {
+        System.out.println("\n--------- DESTROYING VMS ---------\n");
+        for (int poi = 0; poi < POI; poi++) {
+//            System.out.println("POI: " + poi);
+            for (int hostID = 0; hostID < EDGE_HOSTS; hostID++) {
+                Host host = edgeBroker[poi].getDatacenterList().get(0).getHost(hostID);
+                for (Vm vm: host.getVmCreatedList()){
+                    vm.setFailed(true);
+                    vm.getHost().getVmScheduler().deallocatePesFromVm(vm);
+                }
+            }
+        }
+    }
+
+    private void spawnVms(ArrayList<int[][]> feasibleFormations, ArrayList<Integer>[] vmPlacement) {
+        // Destroy existing VMs
+        destroyVms();
+
+//        for (int[][] ff : feasibleFormations)
+//            System.out.println(Arrays.deepToString(ff));
+
+        // Spawn new VMs as instructed
+        System.out.println("\n--------- SPAWNING VMS ---------\n");
+        for (int poi = 0; poi < POI; poi++) {
+            ArrayList<Vm> tempVmList = new ArrayList();
+            System.out.println("POI: " + poi);
+            for (int host = 0; host < vmPlacement[poi].size(); host++) {
+                System.out.println("Host: " + host);
+                for (int app = 0; app < APPS; app++) {
+                    System.out.println("App: " + app);
+                    for (int vm = 0; vm < feasibleFormations.get(vmPlacement[poi].get(host))[app].length; vm++) {
+                        int vmCores = feasibleFormations.get(vmPlacement[poi].get(host))[app][vm];
+                        int vmFlavor = ArrayUtils.indexOf(VM_PES[app], vmCores);
+//                        System.out.println("Host Type Vm Types for this app: " + Arrays.toString(feasibleFormations.get(vmPlacement[poi].get(host))[app]));
+//                        System.out.println("VM Flavor: " + vmFlavor);
+//                        System.out.println("VM Cores: " + vmCores);
+                        vmList[poi][app] = createVms(1, poi, app, vmFlavor, host, vm);
+                        tempVmList.addAll(vmList[poi][app]);
+                        if (vmList[poi][app].size() > maxVmSize) maxVmSize = vmList[poi][app].size();
+                    }
+                }
+            }
+            edgeBroker[poi].submitVmList(tempVmList);
+        }
+    }
+
+    private void spawnInitialVms() {
+        int noOfVms = 1;
         int flavor = 2;
-        int noOfVms = 1; // per app
         for (int poi = 0; poi < POI; poi++) {
             ArrayList<Vm> tempVmList = new ArrayList();
             for (int app = 0; app < APPS; app++) {
-                vmList[poi][app] = createVms(noOfVms, poi, app, flavor);
+                vmList[poi][app] = createVms(noOfVms, poi, app, flavor, 0, 0);
                 tempVmList.addAll(vmList[poi][app]);
                 if (vmList[poi][app].size() > maxVmSize) maxVmSize = vmList[poi][app].size();
             }

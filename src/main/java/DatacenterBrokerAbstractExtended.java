@@ -1192,4 +1192,12 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
      * @see #setVmMapper(Function)
      */
     protected abstract Vm defaultVmMapper(Cloudlet cloudlet);
+
+    public void emptyVmCreatedList() {
+        vmCreatedList.clear();
+    }
+
+    public void emptyVmExecList() {
+        vmExecList.clear();
+    }
 }
