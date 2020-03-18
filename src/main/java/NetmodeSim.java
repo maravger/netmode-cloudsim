@@ -14,6 +14,7 @@ import org.cloudbus.cloudsim.provisioners.ResourceProvisioner;
 import org.cloudbus.cloudsim.provisioners.ResourceProvisionerSimple;
 import org.cloudbus.cloudsim.resources.Pe;
 import org.cloudbus.cloudsim.resources.PeSimple;
+import org.cloudbus.cloudsim.schedulers.cloudlet.CloudletSchedulerTimeShared;
 import org.cloudbus.cloudsim.schedulers.vm.VmScheduler;
 import org.cloudbus.cloudsim.schedulers.vm.VmSchedulerTimeShared;
 import org.cloudbus.cloudsim.utilizationmodels.UtilizationModel;
@@ -150,7 +151,6 @@ public class NetmodeSim {
         if (!(lastAccessed == (int) evt.getTime())) {
             // Initial configurations
 //            if (firstEvent) correctlySetVmDescriptions();
-            correctlySetVmDescriptions();
 
             // Vm resource usage stats collected per second
             collectVmStats();
@@ -158,6 +158,7 @@ public class NetmodeSim {
             // If a full interval has been completed or first interval, predict group movement, optimize vm placement,
             // actually move group, generate request rate per cell
             if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || firstEvent) {
+
                 // Predict group movement and random users arrival //
                 int[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
 
@@ -199,10 +200,10 @@ public class NetmodeSim {
                 // First interval arrangements are now over
                 if (firstEvent) firstEvent = false;
             }
-
+            
             // Actually create the requests based on the previously generated request rate and delegate them per VM/app
             int app = 0; // TODO: create workload for more than one apps
-//            if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
+            if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
 
             lastAccessed = (int) evt.getTime();
         }
@@ -468,6 +469,7 @@ public class NetmodeSim {
 //                System.out.println(c.getLastDatacenterArrivalTime());
 //                System.out.println(lastIntervalFinishTime);
                 if (c.getLastDatacenterArrivalTime() > lastIntervalFinishTime) {
+                    System.out.println("VM description: " + c.getVm().getDescription());
                     JsonObject description = new JsonParser().parse(c.getVm().getDescription()).getAsJsonObject();
                     int app = description.get("App").getAsInt();
 //                    System.out.println(c.getLastDatacenterArrivalTime());
@@ -480,15 +482,17 @@ public class NetmodeSim {
         return new IntervalStats(intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime);
     }
 
-    private void correctlySetVmDescriptions() {
-        for (int poi = 0; poi < POI; poi++) {
-            for (int app = 0; app < APPS; app++) {
-                for (int vmi = 0; vmi < vmList[poi][app].size(); vmi++) {
-                    Vm vm = vmList[poi][app].get(vmi);
-                    vm.setDescription("{\"App\": " + app + " }"); // Vm Description in Json format
-                }
-            }
-        }
+    private void correctlySetVmDescriptions(ArrayList<Vm> vmList) {
+//        for (int poi = 0; poi < POI; poi++) {
+//            for (int app = 0; app < APPS; app++) {
+//                for (int vmi = 0; vmi < vmList.size(); vmi++) {
+//                    Vm vm = vmList.get(vmi);
+//                    vm.setDescription("{\"App\": " + app + " }"); // Vm Description in Json format
+//                }
+//            }
+//        }
+        for (Vm vm: vmList)
+            vm.setDescription("{\"App\": " + vm.getId()%1000%100/10 + " }"); // Vm Description in Json format
     }
 
     private void generateRequests(double[][] requestRatePerCell, EventInfo evt, int app) {
@@ -507,14 +511,14 @@ public class NetmodeSim {
                     taskList[poi][app] = (ArrayList<TaskSimple>) createTasks(tasksToCreate, poi, app, 0);
                     // TODO make app selection + load balancing
                     // TODO: allocate tasks to Hosts and subsequently VMs based on their size. Create a mechanism on this
-                    Random rand = new Random();
-                    int host = rand.nextInt(2);
-//                    int vmId = 0;
-                    int vmId = rand.nextInt(vmList[poi][app].size());
-                    System.out.println("VM: " + vmId);
-//                    poi * 1000 + host * 100 + app * 10 + vmId
-                    edgeBroker[poi].submitCloudletList(taskList[poi][app], vmList[poi][app].get(vmId));
-                    System.out.println("Submitting requests to vm: " + vmList[poi][app].get(vmId).getId());
+                    edgeBroker[poi].submitCloudletList(taskList[poi][app]);
+                    for (TaskSimple task: taskList[poi][app]) {
+                        if (task.getVm().getCloudletScheduler().getClass() == CloudletSchedulerTimeShared.class) {
+                            CloudletSchedulerTimeShared sched = (CloudletSchedulerTimeShared)task.getVm().getCloudletScheduler();
+                            System.out.println("Current Mips Share Size: " + sched.getCurrentMipsShare().size());
+                            System.out.println("VM " + task.getVm().getId() + " Number of PES: " + task.getVm().getNumberOfPes());
+                        }
+                    }
                 }
                 else {
                     System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n", 0,
@@ -622,13 +626,11 @@ public class NetmodeSim {
         final ArrayList<Vm> list = new ArrayList<>(noOfVms);
         for (int i = 0; i < noOfVms; i++) {
             //Uses a CloudletSchedulerTimeShared by default to schedule Cloudlets
+            CloudletSchedulerTimeSharedExtended cloudletScheduler = new CloudletSchedulerTimeSharedExtended();
             final Vm vm = new VmSimple(vm_pe_mips, vm_pes);
             vm.setId(poi * 1000 + host * 100 + app * 10 + vmId);
             vm.setRam(vm_ram).setBw(vm_bw).setSize(1000);
-            // Description contains application id
-            vm.setDescription(Integer.toString(app));
-//            vm.setHost(edgeBroker[poi].getDatacenterList().get(0).getHost(host)); // Only one datacenter per POI
-//            vm.setHost(edgeBroker[poi].getDatacenterList().get(0).getHost(0)); // Only one datacenter per POI
+            vm.setCloudletScheduler(cloudletScheduler); // TODO: not sure if suppressing is better or real issue exists
             list.add(vm);
         }
         return list;
@@ -724,6 +726,7 @@ public class NetmodeSim {
                 }
             }
             edgeBroker[poi].submitVmList(tempVmList);
+            correctlySetVmDescriptions(tempVmList);
         }
     }
 
