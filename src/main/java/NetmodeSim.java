@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 360;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 61;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -127,7 +127,8 @@ public class NetmodeSim {
         energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
 
         // Initial Predicted Workload TODO: change
-        double [][] predictedWorkload = {{100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}};
+        double [][] predictedWorkload = {{100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}, {100, 100},
+                {50, 50}, {70, 70}};
         ArrayList<Integer>[] vmPlacement =
                 optimizeVmPlacement(EDGE_HOSTS, predictedWorkload, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
 
@@ -174,6 +175,8 @@ public class NetmodeSim {
                 calculateResidualResources(vmPlacement, EDGE_HOSTS);
 
                 // MRF step TODO
+
+                // Spawn VMs realizing the above decisions
                 spawnVms(feasibleFormations, vmPlacement);
 
                 // Move groups
@@ -200,7 +203,7 @@ public class NetmodeSim {
                 // First interval arrangements are now over
                 if (firstEvent) firstEvent = false;
             }
-            
+
             // Actually create the requests based on the previously generated request rate and delegate them per VM/app
             int app = 0; // TODO: create workload for more than one apps
             if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt, app);
@@ -211,6 +214,7 @@ public class NetmodeSim {
 
     private int[][] predictNextIntervalUsers(Group[] groups, HashMap<String, double[]> transitionProbabilitiesMap) {
         double[] transitionProbabilities;
+        double[][] floatPredictedUsersPerCellPerApp = new double[POI][APPS];
         int[][] predictedUsersPerCellPerApp = new int[POI][APPS];
 
         for (Group group : groups) {
@@ -225,11 +229,16 @@ public class NetmodeSim {
 //            System.out.println("Group Size: " + group.size);
             for (int i = 0; i < transitionProbabilities.length; i++) {
                 // TODO maybe add +1 to predicted users
-                predictedUsersPerCellPerApp[i][group.app] += Math.round(group.size * transitionProbabilities[i]);
+                floatPredictedUsersPerCellPerApp[i][group.app] += group.size * transitionProbabilities[i];
 //                System.out.println("POI " + i + " Group Predicted Users: " + group.size * transitionProbabilities[i]);
+//                System.out.println("POI " + i + " Total Predicted Users: " + floatPredictedUsersPerCellPerApp[i][group.app]);
             }
-//            System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
         }
+//        System.out.println("Total Predicted Users: " + Arrays.deepToString(floatPredictedUsersPerCellPerApp));
+        for (int i = 0; i < POI; i++)
+            for (int j = 0; j < APPS; j++)
+                predictedUsersPerCellPerApp[i][j] = (int)Math.round(floatPredictedUsersPerCellPerApp[i][j]);
+//        System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
 
         return predictedUsersPerCellPerApp;
     }
@@ -469,7 +478,7 @@ public class NetmodeSim {
 //                System.out.println(c.getLastDatacenterArrivalTime());
 //                System.out.println(lastIntervalFinishTime);
                 if (c.getLastDatacenterArrivalTime() > lastIntervalFinishTime) {
-                    System.out.println("VM description: " + c.getVm().getDescription());
+//                    System.out.println("VM description: " + c.getVm().getDescription());
                     JsonObject description = new JsonParser().parse(c.getVm().getDescription()).getAsJsonObject();
                     int app = description.get("App").getAsInt();
 //                    System.out.println(c.getLastDatacenterArrivalTime());
