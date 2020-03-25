@@ -102,7 +102,7 @@ public final class Optimizer {
             /* a solution is calculated, now lets get some results */
 
             /* objective value */
-            System.out.println("Optimized Power Consumption: " + lp.getObjective());
+            System.out.println("Optimized Power Consumption: " + Math.round(lp.getObjective()) + "W");
 
             /* variable values */
             lp.getVariables(row);
