@@ -37,14 +37,14 @@ public final class CSVmachine {
         }
     }
 
-    public void formatAndPrintIntervalStats(ArrayList<Vm>[][] vmList, int[][] intervalFinishedTasks, int[][] intervalAdmittedTasks,
-                                            double[][] accumulatedResponseTime, double [][][] accumulatedCpuUtil) {
+    public void formatAndPrintIntervalStats(int[][] intervalFinishedTasks, int[][] intervalAdmittedTasks,
+                                            double[][] accumulatedResponseTime, HashMap<Long, Double> accumulatedCpuUtil) {
         try {
             BufferedWriter br = new BufferedWriter(new FileWriter(WRITE_INTERVALS_CSV_FILE_LOCATION, true));
             StringBuilder sb = new StringBuilder();
 
             System.out.printf("%n%n------------------------- INTERVAL INFO --------------------------%n%n");
-            System.out.printf(" POI | App | Admitted Tasks| Finished Tasks | Average Throughput | Average Response Time \n");
+            System.out.printf(" POI | App | Admitted Tasks | Finished Tasks | Average Throughput | Average Response Time \n");
             for (int poi = 0; poi < pois; poi++) {
                 for (int app = 0; app < apps; app++) {
                     // Print in screen
@@ -64,16 +64,15 @@ public final class CSVmachine {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        SortedSet<Long> vmIDs = new TreeSet<>(accumulatedCpuUtil.keySet());
         System.out.println("\n------------------------------------------------------------------\n");
-        System.out.printf(" VM | Average CPU Util. \n");
-        for (int poi = 0; poi < pois; poi++) {
-            for (int app = 0; app < apps; app++) {
-                for (int vm = 0; vm < vmList[poi][app].size(); vm++) {
-                    System.out.println(String.format("%3s", poi + "" + app + "" + vm) + " | " +
-                            String.format("%17.2f", (accumulatedCpuUtil[poi][app][vm] / samplingInterval) * 100));
-                }
-            }
+        System.out.printf("   VM | Average CPU Util. \n");
+        for (Long vmID : vmIDs) {
+            System.out.println(String.format("%5s", vmID) + " | " +
+            String.format("%17.2f", (accumulatedCpuUtil.get(vmID) / samplingInterval) * 100));
         }
+        System.out.println();
+        System.out.println("\n------------------------------------------------------------------\n");
     }
 
     public HashMap<String, double[]> readNMMCTransitionMatrixCSV() {

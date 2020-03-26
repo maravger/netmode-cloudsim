@@ -6,11 +6,11 @@ import java.util.Random;
 
 // One per POI
 public class LoadBalancer {
-    int poiID;
-    ArrayList<Vm> vmPool;
-    ArrayList<Vm>[] vmsOfApp;
-    int[] totalVmCoresPerApp;
-    ArrayList<Double>[] lbCumulativeProbabilities;
+    private int poiID;
+    private ArrayList<Vm> vmPool;
+    public ArrayList<Vm>[] vmsOfApp;
+    private int[] totalVmCoresPerApp;
+    private ArrayList<Double>[] lbCumulativeProbabilities;
 
     public LoadBalancer(ArrayList<Vm> vmPool, int apps, int poi) {
         this.poiID = poi;
@@ -73,4 +73,5 @@ public class LoadBalancer {
             }
         }
     }
+
 }

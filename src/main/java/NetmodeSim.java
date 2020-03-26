@@ -78,7 +78,7 @@ public class NetmodeSim {
     private DatacenterBrokerSimpleExtended[] edgeBroker;
     private ArrayList<Vm>[][] vmList;
     private ArrayList<TaskSimple>[][] taskList;
-    private double [][][] accumulatedCpuUtil;
+    private HashMap<Long, Double> accumulatedCpuUtil;
     private int [][] taskCounter;
     private int lastIntervalFinishTime;
     private HashMap<String, int[]> transitionsLog;
@@ -101,6 +101,7 @@ public class NetmodeSim {
         csvm = new CSVmachine(POI, APPS, SAMPLING_INTERVAL);
 
         transitionsLog = new HashMap<>();
+        accumulatedCpuUtil = new HashMap<>();
         vmList = (ArrayList<Vm>[][]) new ArrayList[POI][APPS];
         taskList = (ArrayList<TaskSimple>[][]) new ArrayList[POI][APPS];
         taskCounter = new int[POI][APPS];
@@ -136,13 +137,13 @@ public class NetmodeSim {
 
         // Create number of initial VMs for each app
         spawnVms(feasibleFormations, vmPlacement);
-        // Initialize stat-gathering lists
-        // TODO (1): reallocate it in every interval taking the number of VMs of the Cloudlets into consideration;
-        accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
 
+        // Run simulation
         runSimulationAndPrintResults();
 
         System.out.println(getClass().getSimpleName() + " finished!");
+
+        // Create a document containing the transitions' Log
         if (CREATE_NMMC_TRANSITION_MATRIX) csvm.createNMMCTransitionMatrixCSV(transitionsLog);
     }
 
@@ -150,9 +151,6 @@ public class NetmodeSim {
     private void masterOfPuppets(final EventInfo evt) {
         // Make sure to call only once per second
         if (!(lastAccessed == (int) evt.getTime())) {
-            // Vm resource usage stats collected per second
-            collectVmStats();
-
             // If a full interval has been completed or first interval, predict group movement, optimize vm placement,
             // actually move group, generate request rate per cell
             if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || firstEvent) {
@@ -167,11 +165,11 @@ public class NetmodeSim {
                     // TODO: remove when debugging is over
                     System.out.println("Request Rate to generate in Previous Interval: " + Arrays.deepToString(requestRatePerCell));
 
-                    csvm.formatAndPrintIntervalStats(vmList, intervalFinishedTasks,
-                            intervalAdmittedTasks, accumulatedResponseTime, accumulatedCpuUtil);
+                    csvm.formatAndPrintIntervalStats(intervalFinishedTasks, intervalAdmittedTasks,
+                            accumulatedResponseTime, accumulatedCpuUtil);
 
                     // Initiate interval variables
-                    accumulatedCpuUtil = new double[POI][APPS][maxVmSize];
+                    accumulatedCpuUtil = new HashMap<>();
                     lastIntervalFinishTime = (int) evt.getTime();
                 }
 
@@ -186,15 +184,15 @@ public class NetmodeSim {
                 // actually allocate VMs and perform MRF
                 ArrayList<Integer>[] vmPlacement =
                         optimizeVmPlacement(EDGE_HOSTS, predictedWorkload, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
-                calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
-                calculateResidualResources(vmPlacement, EDGE_HOSTS);
+                double[][] residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
+                int[] residualResources = calculateResidualResources(vmPlacement, EDGE_HOSTS);
 
-                // MRF step TODO
+                // MRF step (TODO)
 
                 // Spawn VMs realizing the above decisions
                 vmPool = spawnVms(feasibleFormations, vmPlacement);
 
-                // Create Load Balancers
+                // Create Load Balancers and assign them one per POI
                 createLoadBalancers(vmPool);
 
                 // Move groups
@@ -202,7 +200,7 @@ public class NetmodeSim {
                     group.move(transitionsLog, POI);
 
                 // Change request rate based on the groups movement
-                requestRatePerCell = createRequestRate(createRandomUsers(GRID_SIZE, groups),
+                requestRatePerCell = createRequestRate(createUsers(GRID_SIZE, groups),
                         APP_REQUEST_RATE_PER_USER, predictedWorkload);
 
                 // First interval arrangements are now over
@@ -210,8 +208,10 @@ public class NetmodeSim {
             }
 
             // Actually create the requests based on the previously generated request rate and delegate them per VM/app
-            // TODO: Fix request generator
             if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt);
+
+            // Vm resource usage stats collected per second
+            collectVmStats();
 
             lastAccessed = (int) evt.getTime();
         }
@@ -448,11 +448,15 @@ public class NetmodeSim {
     private void collectVmStats() {
         for (int poi = 0; poi < POI; poi++) {
             for (int app = 0; app < APPS; app++) {
-                for (int vm = 0; vm < vmList[poi][app].size(); vm++) {
-                    accumulatedCpuUtil[poi][app][vm] += vmList[poi][app].get(vm).getCpuPercentUtilization();
-//                    System.out.println("VM ID: " + poi + "" + app + "" + vm);
-//                    System.out.println("Current CPU Util: " + vmList[poi][app].get(vm).getCpuPercentUtilization());
-//                    System.out.println("Total CPU Util: " + accumulatedCpuUtil[poi][app][vm]);
+                for (Vm vm : loadBalancer[poi].vmsOfApp[app]) {
+                    if (accumulatedCpuUtil.containsKey(vm.getId()))
+                        accumulatedCpuUtil.put(vm.getId(),
+                                accumulatedCpuUtil.get(vm.getId()) + vm.getCpuPercentUtilization());
+                    else
+                        accumulatedCpuUtil.put(vm.getId(), vm.getCpuPercentUtilization());
+                    System.out.println("VM ID: " + vm.getId());
+                    System.out.println("Current CPU Util: " + vm.getCpuPercentUtilization());
+                    System.out.println("Total CPU Util: " + accumulatedCpuUtil.get(vm.getId()));
                 }
             }
         }
@@ -583,7 +587,7 @@ public class NetmodeSim {
         return requestRatePerCellPerApp;
     }
 
-    private int[][][] createRandomUsers(int gridSize, Group[] groups) {
+    private int[][][] createUsers(int gridSize, Group[] groups) {
         Random random = new Random();
         int[][][] usersPerCell = new int[gridSize][gridSize][APPS];
 
