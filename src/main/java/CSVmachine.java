@@ -1,5 +1,6 @@
 import javafx.util.Pair;
-import org.cloudbus.cloudsim.vms.Vm;
+import sun.misc.Signal;
+import sun.misc.SignalHandler;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -8,7 +9,7 @@ import java.nio.file.StandardCopyOption;
 import java.text.DecimalFormat;
 import java.util.*;
 
-public final class CSVmachine {
+public final class CSVmachine implements SignalHandler{
     // TODO: read these values from external file
     // TODO: set debugging toggle and different colors
 
@@ -39,6 +40,22 @@ public final class CSVmachine {
             br.close();
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    public void listenTo(String signalName) {
+        Signal signal = new Signal(signalName);
+        Signal.handle(signal, this);
+    }
+
+    public void handle(Signal signal) {
+        System.out.println("Signal: " + signal);
+        if (signal.toString().trim().equals("SIGINT")) {
+            System.out.println("SIGINT raised, archiving and terminating...");
+
+            archiveSimulationCSVs();
+
+            System.exit(1);
         }
     }
 
@@ -255,13 +272,13 @@ public final class CSVmachine {
         }
     }
 
-    private void archiveSimulationCSVs() {
+    public void archiveSimulationCSVs() {
         File[] folders = new File(System.getProperty("user.dir") + "/evaluation_results").listFiles();
         for (File folder : folders) {
             if (folder.isDirectory()) {
-                System.out.println(folder.toPath());
+//                System.out.println(folder.toPath());
                 File[] files = folder.listFiles();
-                System.out.println(files.toString());
+//                System.out.println(files.toString());
                 for (File file : files) {
                     if (file.isFile()) {
                         try {

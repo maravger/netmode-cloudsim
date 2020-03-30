@@ -101,6 +101,12 @@ public class NetmodeSim {
     public NetmodeSim() {
         csvm = new CSVmachine(POI, APPS, SAMPLING_INTERVAL);
 
+        // Archive previous Simulation results
+        csvm.archiveSimulationCSVs();
+
+        // CSV machine "listens" to terminating signals in order to archive files
+        csvm.listenTo("INT");
+
         transitionsLog = new HashMap<>();
         accumulatedCpuUtil = new HashMap<>();
         vmList = (ArrayList<Vm>[][]) new ArrayList[POI][APPS];
