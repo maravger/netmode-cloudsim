@@ -4,6 +4,7 @@ import org.cloudbus.cloudsim.vms.Vm;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.text.DecimalFormat;
 import java.util.*;
 
@@ -18,12 +19,16 @@ public final class CSVmachine {
     private int pois;
     private int apps;
     private int samplingInterval;
+    private String timeStamp;
 
     public CSVmachine (int pois, int apps, int samplingInterval) {
         this.pois = pois;
         this.apps = apps;
         this.samplingInterval = samplingInterval;
+        this.timeStamp = String.valueOf(new Date());
+        System.out.println(this.timeStamp);
 
+        // TODO: remove when "premium" CSV logging is complete
         // Initial Configuration of "Interval Stats" CSV file
         try {
             Files.deleteIfExists(Paths.get(WRITE_INTERVALS_CSV_FILE_LOCATION));
@@ -37,25 +42,26 @@ public final class CSVmachine {
         }
     }
 
-    public void formatAndPrintIntervalStats(int[][] intervalFinishedTasks, int[][] intervalAdmittedTasks,
-                                            double[][] accumulatedResponseTime, HashMap<Long, Double> accumulatedCpuUtil) {
+    public void formatPrintAndArchiveIntervalStats(int intervalNo, double[][] intervalPredictedTasks,
+                                                   int[][] intervalFinishedTasks, int[][] intervalAdmittedTasks,
+                                                   double[][] accumulatedResponseTime, HashMap<Long, Double> accumulatedCpuUtil) {
         try {
             BufferedWriter br = new BufferedWriter(new FileWriter(WRITE_INTERVALS_CSV_FILE_LOCATION, true));
             StringBuilder sb = new StringBuilder();
 
             System.out.printf("%n%n------------------------- INTERVAL INFO --------------------------%n%n");
             System.out.printf(" POI | App | Admitted Tasks | Finished Tasks | Average Throughput | Average Response Time \n");
-            for (int poi = 0; poi < pois; poi++) {
-                for (int app = 0; app < apps; app++) {
+            for (int poi = 0; poi < this.pois; poi++) {
+                for (int app = 0; app < this.apps; app++) {
                     // Print in screen
                     System.out.println(String.format("%4s", poi) + " | " + String.format("%3s", app) + " | " +
                             String.format("%14s", intervalAdmittedTasks[poi][app]) + " | " + String.format("%14s",
                             intervalFinishedTasks[poi][app]) + " | " + String.format("%18.2f", intervalFinishedTasks[poi][app]
-                            / (double) samplingInterval) + " | " + String.format("%21.2f", accumulatedResponseTime[poi][app] /
+                            / (double) this.samplingInterval) + " | " + String.format("%21.2f", accumulatedResponseTime[poi][app] /
                             intervalFinishedTasks[poi][app]));
                     // Print in the CSV file
                     sb.append(poi + "," + app + "," + intervalAdmittedTasks[poi][app] + "," + intervalFinishedTasks[poi][app] +
-                            "," + String.format("%.2f", intervalFinishedTasks[poi][app] / (double) samplingInterval) + ","
+                            "," + String.format("%.2f", intervalFinishedTasks[poi][app] / (double) this.samplingInterval) + ","
                             + String.format("%.2f", accumulatedResponseTime[poi][app] / intervalFinishedTasks[poi][app]) + "\n");
                 }
             }
@@ -69,10 +75,14 @@ public final class CSVmachine {
         System.out.printf("   VM | Average CPU Util. \n");
         for (Long vmID : vmIDs) {
             System.out.println(String.format("%5s", vmID) + " | " +
-            String.format("%17.2f", (accumulatedCpuUtil.get(vmID) / samplingInterval) * 100));
+            String.format("%17.2f", (accumulatedCpuUtil.get(vmID) / this.samplingInterval) * 100));
         }
         System.out.println();
         System.out.println("\n------------------------------------------------------------------\n");
+
+        System.out.println("...Updating Interval Prediction CSVs");
+        this.updateIntervalPredictionCSVs(intervalPredictedTasks, intervalAdmittedTasks,
+                intervalNo);
     }
 
     public HashMap<String, double[]> readNMMCTransitionMatrixCSV() {
@@ -218,4 +228,52 @@ public final class CSVmachine {
 
         return transitionMatrix;
     }
+
+    private void updateIntervalPredictionCSVs(double[][] predictedWorkload, int[][] admittedTasks, int intervalNo) {
+        // Prediction Evaluation
+        for (int poi = 0; poi < this.pois; poi++) {
+            for (int app = 0; app < this.apps; app++) {
+                // Initiate files if not present
+                String fileName = "(" + this.timeStamp + ")" + "_P" + poi + "_A" + app + ".csv";
+                File csvFile = new File(System.getProperty("user.dir") + "/evaluation_results/Prediction/" + fileName);
+                StringBuilder sb = new StringBuilder();
+                if(!csvFile.isFile()) {
+//                    System.out.println("File does not exist!");
+                    sb.append("Time, Predicted, Real\n");
+                }
+                try {
+                    BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
+
+                    sb.append(intervalNo + "," + predictedWorkload[poi][app] + "," + admittedTasks[poi][app]+ "\n");
+
+                    br.write(sb.toString());
+                    br.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void archiveSimulationCSVs() {
+        File[] folders = new File(System.getProperty("user.dir") + "/evaluation_results").listFiles();
+        for (File folder : folders) {
+            if (folder.isDirectory()) {
+                System.out.println(folder.toPath());
+                File[] files = folder.listFiles();
+                System.out.println(files.toString());
+                for (File file : files) {
+                    if (file.isFile()) {
+                        try {
+                            Files.move(file.toPath(), Paths.get(folder.toPath().toString(), "Archived", file.getName()),
+                                    StandardCopyOption.REPLACE_EXISTING);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }

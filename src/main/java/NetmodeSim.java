@@ -91,7 +91,8 @@ public class NetmodeSim {
     private double[][] guaranteedWorkload;
     private double[] energyConsumption;
     private LoadBalancer[] loadBalancer;
-    ArrayList<Vm>[] vmPool;
+    private ArrayList<Vm>[] vmPool;
+    private double[][] intervalPredictedTasks;
 
     public static void main(String[] args) {
         new NetmodeSim();
@@ -129,9 +130,11 @@ public class NetmodeSim {
         guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
         energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
 
-        // Initial Predicted Workload TODO: change
+        // Initial Predicted Workload TODO: change, too manual
         double [][] predictedWorkload = {{100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}, {100, 100},
                 {50, 50}, {70, 70}};
+        intervalPredictedTasks = predictedWorkload;
+
         ArrayList<Integer>[] vmPlacement =
                 optimizeVmPlacement(EDGE_HOSTS, predictedWorkload, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
 
@@ -165,8 +168,9 @@ public class NetmodeSim {
                     // TODO: remove when debugging is over
                     System.out.println("Request Rate to generate in Previous Interval: " + Arrays.deepToString(requestRatePerCell));
 
-                    csvm.formatAndPrintIntervalStats(intervalFinishedTasks, intervalAdmittedTasks,
-                            accumulatedResponseTime, accumulatedCpuUtil);
+                    csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
+                            intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
+                            accumulatedCpuUtil);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -177,14 +181,14 @@ public class NetmodeSim {
                 int[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
 
                 // Translate predicted users per cell to workload
-                double[][] predictedWorkload =
+                double[][] nextIntervalPredictedTasks =
                         predictNextIntervalWorkload(predictedUsersPerCellPerApp, APP_REQUEST_RATE_PER_USER);
 
                 // Optimize VM placement based on energy consumption and guaranteed workload completion,
                 // actually allocate VMs and perform MRF
                 ArrayList<Integer>[] vmPlacement =
-                        optimizeVmPlacement(EDGE_HOSTS, predictedWorkload, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
-                double[][] residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, predictedWorkload);
+                        optimizeVmPlacement(EDGE_HOSTS, nextIntervalPredictedTasks, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
+                double[][] residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, nextIntervalPredictedTasks);
                 int[] residualResources = calculateResidualResources(vmPlacement, EDGE_HOSTS);
 
                 // MRF step (TODO)
@@ -201,7 +205,7 @@ public class NetmodeSim {
 
                 // Change request rate based on the groups movement
                 requestRatePerCell = createRequestRate(createUsers(GRID_SIZE, groups),
-                        APP_REQUEST_RATE_PER_USER, predictedWorkload);
+                        APP_REQUEST_RATE_PER_USER, nextIntervalPredictedTasks);
 
                 // First interval arrangements are now over
                 if (firstEvent) firstEvent = false;
@@ -269,6 +273,9 @@ public class NetmodeSim {
         }
 
         System.out.println("Total Predicted Workload: " + Arrays.deepToString(predictedIntervalWorkload));
+
+        // Assign current value as "previous" to be used solely in the printing of the results. TODO: reconsider style
+        intervalPredictedTasks = predictedIntervalWorkload;
         return predictedIntervalWorkload;
     }
 
@@ -454,9 +461,9 @@ public class NetmodeSim {
                                 accumulatedCpuUtil.get(vm.getId()) + vm.getCpuPercentUtilization());
                     else
                         accumulatedCpuUtil.put(vm.getId(), vm.getCpuPercentUtilization());
-                    System.out.println("VM ID: " + vm.getId());
-                    System.out.println("Current CPU Util: " + vm.getCpuPercentUtilization());
-                    System.out.println("Total CPU Util: " + accumulatedCpuUtil.get(vm.getId()));
+//                    System.out.println("VM ID: " + vm.getId());
+//                    System.out.println("Current CPU Util: " + vm.getCpuPercentUtilization());
+//                    System.out.println("Total CPU Util: " + accumulatedCpuUtil.get(vm.getId()));
                 }
             }
         }
