@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 61;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 3600;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -89,10 +89,12 @@ public class NetmodeSim {
     private Group[] groups;
     private ArrayList<int[][]> feasibleFormations;
     private double[][] guaranteedWorkload;
-    private double[] energyConsumption;
+    private double[] powerConsumption;
     private LoadBalancer[] loadBalancer;
     private ArrayList<Vm>[] vmPool;
     private double[][] intervalPredictedTasks;
+    private int[] poiAllocatedCores;
+    private int[] poiPowerConsumption;
 
     public static void main(String[] args) {
         new NetmodeSim();
@@ -112,6 +114,8 @@ public class NetmodeSim {
         vmList = (ArrayList<Vm>[][]) new ArrayList[POI][APPS];
         taskList = (ArrayList<TaskSimple>[][]) new ArrayList[POI][APPS];
         taskCounter = new int[POI][APPS];
+        poiAllocatedCores = new int[POI];
+        poiPowerConsumption = new int[POI];
 
         simData = csvm.readSimCSVData();
         firstEvent = true;
@@ -133,8 +137,8 @@ public class NetmodeSim {
 
         // Calculate variables required for VM optimization
         feasibleFormations = calculateFeasibleServerFormations(EDGE_HOST_PES, VM_PES);
-        guaranteedWorkload = calculateServerGuaranteedWorkload(feasibleFormations);
-        energyConsumption = calculateServerPowerConsumption(feasibleFormations, EDGE_HOST_PES);
+        guaranteedWorkload = calculateHostGuaranteedWorkload(feasibleFormations);
+        powerConsumption = calculateHostPowerConsumption(feasibleFormations, EDGE_HOST_PES);
 
         // Initial Predicted Workload TODO: change, too manual
         double [][] predictedWorkload = {{100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}, {100, 100},
@@ -176,7 +180,7 @@ public class NetmodeSim {
 
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
-                            accumulatedCpuUtil);
+                            accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -336,13 +340,13 @@ public class NetmodeSim {
             try {
                 System.out.print("POI: " + poi + ", ");
                 tempVmPlacement[poi] =
-                        Optimizer.optimizeVmPlacement(guaranteedWorkload, energyConsumption, hosts, predictedWorkload[poi]);
+                        Optimizer.optimizeVmPlacement(guaranteedWorkload, powerConsumption, hosts, predictedWorkload[poi]);
             } catch (LpSolveException e) {
                 e.printStackTrace();
             }
         }
-        System.out.println("\nVM Placement (before rejecting underutilised servers): \n"
-                + Arrays.deepToString(tempVmPlacement));
+//        System.out.println("\nVM Placement (before rejecting underutilised servers): \n"
+//                + Arrays.deepToString(tempVmPlacement));
 
         // Cut out "underutilised" servers. Underutilisation criteria = less than 50% of the cores allocated
         int poi = 0;
@@ -359,12 +363,27 @@ public class NetmodeSim {
             vmPlacement[poi] = site;
             poi++;
         }
+
+        // Calculate Hosts' power consumption and total allocated cores
+        poiPowerConsumption = new int[POI];
+        poiAllocatedCores = new int[POI];
+        for (poi = 0; poi < POI; poi++) {
+            for (int hostType : vmPlacement[poi]) {
+                for (int app = 0; app < APPS; app++) {
+                    poiAllocatedCores[poi] += IntStream.of(feasibleFormations.get(hostType)[app]).sum();
+                }
+                poiPowerConsumption[poi] += powerConsumption[hostType];
+            }
+        }
+
         System.out.println("VM Placement (final): \n" + Arrays.deepToString(vmPlacement));
+        System.out.println("POIs' Power Consumption (in W): \n" + Arrays.toString(poiPowerConsumption));
+        System.out.println("POIs' Total Allocated Cores: \n" + Arrays.toString(poiAllocatedCores));
 
         return vmPlacement;
     }
 
-    private double[][] calculateServerGuaranteedWorkload(ArrayList<int[][]> feasibleFormations) {
+    private double[][] calculateHostGuaranteedWorkload(ArrayList<int[][]> feasibleFormations) {
         int totalFormations = feasibleFormations.size();
         double[][] guaranteedWorkload = new double[totalFormations][APPS];
 
@@ -382,7 +401,7 @@ public class NetmodeSim {
         return guaranteedWorkload;
     }
 
-    private double[] calculateServerPowerConsumption(ArrayList<int[][]> feasibleFormations, int serverCores) {
+    private double[] calculateHostPowerConsumption(ArrayList<int[][]> feasibleFormations, int serverCores) {
         int totalFormations = feasibleFormations.size();
         double[] energyConsumption = new double[feasibleFormations.size()];
         double pMax = 2000; // the maximum power consumed when the server is fully utilized, in Watts
@@ -392,12 +411,13 @@ public class NetmodeSim {
 //            System.out.println(Arrays.deepToString(feasibleFormations.get(permutation)));
             for (int app = 0; app < APPS; app++) {
                 for (int flavorCores : feasibleFormations.get(permutation)[app]) {
-//                    System.out.println(flavorCores);
-//                    System.out.println(ArrayUtils.indexOf(VM_PES[app], flavorCores));
+//                    System.out.println("FlavorCores: " + flavorCores);
+//                    System.out.println("Index of flavorCores: " + ArrayUtils.indexOf(VM_PES[app], flavorCores));
                     // Use Energy Model defined in paper to predict the power consumed by each VM provisioned
                     // in a server with an error below 5%
                     energyConsumption[permutation] +=
-                            calculateVmPowerConsumption(serverCores, ArrayUtils.indexOf(VM_PES[app], flavorCores), k, pMax);
+//                            calculateVmPowerConsumption(serverCores, ArrayUtils.indexOf(VM_PES[app], flavorCores), k, pMax);
+                            calculateVmPowerConsumption(serverCores, flavorCores, k, pMax);
 //                    System.out.println(energyConsumption[permutation]);
                 }
             }
@@ -448,12 +468,12 @@ public class NetmodeSim {
                 uniqueFormations.add(newPermutation);
         }
 
-        for (int[][] permutation : uniqueFormations) {
-            int permutationCoreSum = 0;
-            for (int app = 0; app < APPS; app++) permutationCoreSum += IntStream.of(permutation[app]).sum();
+//        for (int[][] permutation : uniqueFormations) {
+//            int permutationCoreSum = 0;
+//            for (int app = 0; app < APPS; app++) permutationCoreSum += IntStream.of(permutation[app]).sum();
 //            System.out.println(permutationCoreSum);
 //            System.out.println(Arrays.deepToString(permutation));
-        }
+//        }
 
         return uniqueFormations;
     }
@@ -812,5 +832,6 @@ public class NetmodeSim {
             tasks.addAll(edgeBroker[poi].getCloudletFinishedList());
         }
         if (!CREATE_NMMC_TRANSITION_MATRIX) new CloudletsTableBuilder(tasks).build();
+        csvm.plotCSVs();
     }
 }
