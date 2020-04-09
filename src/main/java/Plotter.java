@@ -92,6 +92,7 @@ public class Plotter extends Application {
 
         lineChart.getData().addAll(predicted, real);
         Scene scene = new Scene(lineChart, 500, 400);
+//        scene.getStylesheets().add("pred_chart_style.css"); //TODO add the stylesheet
         stage.setScene(scene);
         stage.show();
 

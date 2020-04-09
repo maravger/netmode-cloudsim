@@ -800,7 +800,7 @@ public class NetmodeSim {
 //                    System.out.println("  App: " + app);
                     for (int vm = 0; vm < feasibleFormations.get(vmPlacement[poi].get(host))[app].length; vm++) {
                         int vmCores = feasibleFormations.get(vmPlacement[poi].get(host))[app][vm];
-                        int vmFlavor = ArrayUtils.indexOf(VM_PES[app], vmCores);
+                        int vmFlavor = ArrayUtils.indexOf(VM_PES[app], vmCores); // TODO write it better!!!
 //                        System.out.println("Host Type Vm Types for this app: " + Arrays.toString(feasibleFormations.get(vmPlacement[poi].get(host))[app]));
                         vmList[poi][app] = createVms(1, poi, app, vmFlavor, host, vm);
                         tempVmList.addAll(vmList[poi][app]);
