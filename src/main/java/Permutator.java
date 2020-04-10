@@ -15,7 +15,6 @@ public class Permutator {
             // Convert i to len th base
             permutations.add(createPermutation(i, flavorCores, size, length));
         }
-
         return permutations;
     }
 

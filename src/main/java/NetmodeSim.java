@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 3600;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 360;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -200,6 +200,8 @@ public class NetmodeSim {
                         optimizeVmPlacement(EDGE_HOSTS, nextIntervalPredictedTasks, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
                 double[][] residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, nextIntervalPredictedTasks);
                 int[] residualResources = calculateResidualResources(vmPlacement, EDGE_HOSTS);
+
+//                MRF.promptEnterKey();
 
                 // MRF step (TODO)
 
@@ -680,9 +682,9 @@ public class NetmodeSim {
         VmScheduler vmScheduler = new VmSchedulerTimeShared();
         Host host = new HostSimple(ram, bw, storage, peList);
         host
-            .setRamProvisioner(ramProvisioner)
-            .setBwProvisioner(bwProvisioner)
-            .setVmScheduler(vmScheduler);
+                .setRamProvisioner(ramProvisioner)
+                .setBwProvisioner(bwProvisioner)
+                .setVmScheduler(vmScheduler);
         return host;
     }
 

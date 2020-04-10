@@ -138,6 +138,12 @@ public class MRFNode {
         this.currentResourcesState = calculateResourceStateThatServesWorkload(this.currentWorkload);
     }
 
+    public void addToCurrentWorkload(int toAdd) {
+        for (int i = 0; i < this.currentWorkload.length; i++) {
+            this.currentWorkload[i] += toAdd;
+        }
+    }
+
     // Returns the most energy efficient poi state that serves the current workload
     public MRFNodeState calculateResourceStateThatServesWorkload(int[] residualWorkload) {
         System.out.println("Checking for POI: " + this.id);
@@ -170,9 +176,13 @@ public class MRFNode {
         ArrayList<Integer> valuesSuperset = new ArrayList<>();
         int[] totalNeighborhoodWorkload = new int[apps];
         for (int app = 0; app < apps; app++) {
+            System.out.println("App: " + app);
             totalNeighborhoodWorkload[app] = this.currentWorkload[app];
-            for (MRFNode node : this.neighbors)
+            System.out.println("Main Node Adding: " + this.currentWorkload[app]);
+            for (MRFNode node : this.neighbors) {
                 totalNeighborhoodWorkload[app] += node.currentWorkload[app];
+                System.out.println("Adding: " + node.currentWorkload[app]);
+            }
             System.out.println("Total neighborhood workload (that has to remain intact) of App " + app + ": " + totalNeighborhoodWorkload[app]);
             totalNeighborhoodWorkload[app] = relaxResidualWorkload(totalNeighborhoodWorkload[app]);
             System.out.println("Total neighborhood workload (that has to remain intact) of App " + app + ", after relaxation: " + totalNeighborhoodWorkload[app]);
@@ -186,12 +196,16 @@ public class MRFNode {
         }
 
         ArrayList<int[]> appPairs = new ArrayList<>();
+//        System.out.println("Values Superset: " + valuesSuperset);
+//        System.out.println("Apps: " + apps);
         // Pair app workload values
         for (int[] permutation : Permutator.calculatePermutationsOfLength(Ints.toArray(valuesSuperset), apps)) {
             // First Check
+//            System.out.println("Checking permutation: " + Arrays.toString(permutation));
             boolean fits = true;
             for (int app = 0; app < apps; app++) {
                 if (permutation[app] > totalNeighborhoodWorkload[app]) fits = false;
+//                System.out.println("Checking permutation: " + Arrays.toString(permutation));
             }
             if (fits) appPairs.add(permutation);
         }
@@ -200,6 +214,7 @@ public class MRFNode {
 //        appPairs.forEach(state -> System.out.println(Arrays.toString(state)));
 
         int size = 0;
+//        System.out.println("Neighborhood size: " + (this.neighbors.size() + 1));
         for (int[][] permutation : Permutator.calculatePermutationsOfLength(appPairs, this.neighbors.size() + 1)) {
             size++;
 //            System.out.println("Checking: " + Arrays.deepToString(permutation));
