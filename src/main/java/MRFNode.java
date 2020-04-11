@@ -84,8 +84,8 @@ public class MRFNode {
             if (IntStream.of(permutation).sum() <= this.residualResources) poiStates.add(permutation);
         }
 
-        System.out.println("All possible Resource states for POI " + id + ": ");
-        poiStates.forEach(state -> System.out.println(Arrays.toString(state)));
+//        System.out.println("All possible Resource states for POI " + id + ": ");
+//        poiStates.forEach(state -> System.out.println(Arrays.toString(state)));
 //        System.out.println("------");
 
         return poiStates;
@@ -107,8 +107,8 @@ public class MRFNode {
             workloadStates.add(workloadState);
         }
 
-        System.out.println("All possible Workload states for POI " + id + ": ");
-        workloadStates.forEach(state -> System.out.println(Arrays.toString(state)));
+//        System.out.println("All possible Workload states for POI " + id + ": ");
+//        workloadStates.forEach(state -> System.out.println(Arrays.toString(state)));
 
         return workloadStates;
     }
@@ -127,8 +127,8 @@ public class MRFNode {
             powerConsStates.add(powerConsState);
         }
 
-        System.out.println("All possible Power Consumption states for POI " + id + ": ");
-        powerConsStates.forEach(state -> System.out.println(state));
+//        System.out.println("All possible Power Consumption states for POI " + id + ": ");
+//        powerConsStates.forEach(state -> System.out.println(state));
 
         return powerConsStates;
     }
@@ -138,16 +138,10 @@ public class MRFNode {
         this.currentResourcesState = calculateResourceStateThatServesWorkload(this.currentWorkload);
     }
 
-    public void addToCurrentWorkload(int toAdd) {
-        for (int i = 0; i < this.currentWorkload.length; i++) {
-            this.currentWorkload[i] += toAdd;
-        }
-    }
-
     // Returns the most energy efficient poi state that serves the current workload
     public MRFNodeState calculateResourceStateThatServesWorkload(int[] residualWorkload) {
-        System.out.println("Checking for POI: " + this.id);
-        System.out.println("Workload to satisfy: " + Arrays.toString(residualWorkload));
+//        System.out.println("Checking for POI: " + this.id);
+//        System.out.println("Workload to satisfy: " + Arrays.toString(residualWorkload));
         for (MRFNodeState state: this.states) {
             boolean fits = true;
             for (int app = 0; app < apps; app++) {
@@ -157,12 +151,12 @@ public class MRFNode {
                 }
             }
             if (fits) {
-                System.out.println("State with workload capacity : " + state.workload[0] + ", " + state.workload[1] + " fits");
-                System.out.println("State Power Consumption : " + state.powerCons + "\n");
+//                System.out.println("State with workload capacity : " + state.workload[0] + ", " + state.workload[1] + " fits");
+//                System.out.println("State Power Consumption : " + state.powerCons + "\n");
                 return state;
             }
         }
-        System.out.println("No state can satisfy given workload!\n");
+//        System.out.println("No state can satisfy given workload!\n");
         return null; // return zero resources state if workload cannot be satisfied // TODO reconsider
     }
 
@@ -170,28 +164,28 @@ public class MRFNode {
     public ArrayList<int[][]> calculateFeasibleNeighborhoodWorkloadStates() {
         ArrayList<int[][]> neighborhoodWorkloadStates = new ArrayList<>();
 
-        System.out.println("Neighborhood of PoI: " + this.id);
+//        System.out.println("Neighborhood of PoI: " + this.id);
 
         // Create all possible values of each app workload for node
         ArrayList<Integer> valuesSuperset = new ArrayList<>();
         int[] totalNeighborhoodWorkload = new int[apps];
         for (int app = 0; app < apps; app++) {
-            System.out.println("App: " + app);
+//            System.out.println("App: " + app);
             totalNeighborhoodWorkload[app] = this.currentWorkload[app];
-            System.out.println("Main Node Adding: " + this.currentWorkload[app]);
+//            System.out.println("Main Node Adding: " + this.currentWorkload[app]);
             for (MRFNode node : this.neighbors) {
                 totalNeighborhoodWorkload[app] += node.currentWorkload[app];
-                System.out.println("Adding: " + node.currentWorkload[app]);
+//                System.out.println("Adding: " + node.currentWorkload[app]);
             }
-            System.out.println("Total neighborhood workload (that has to remain intact) of App " + app + ": " + totalNeighborhoodWorkload[app]);
+//            System.out.println("Total neighborhood workload (that has to remain intact) of App " + app + ": " + totalNeighborhoodWorkload[app]);
             totalNeighborhoodWorkload[app] = relaxResidualWorkload(totalNeighborhoodWorkload[app]);
-            System.out.println("Total neighborhood workload (that has to remain intact) of App " + app + ", after relaxation: " + totalNeighborhoodWorkload[app]);
+//            System.out.println("Total neighborhood workload (that has to remain intact) of App " + app + ", after relaxation: " + totalNeighborhoodWorkload[app]);
 
             ArrayList<Integer> values = new ArrayList<>();
             for (int b = 0; b < totalNeighborhoodWorkload[app] + 1; b++) {
                 if (b % relaxationFactor == 0) values.add(b);
             }
-            System.out.println("All possible values of App: " + app + " for state of Neighborhood: " + values);
+//            System.out.println("All possible values of App: " + app + " for state of Neighborhood: " + values);
             if (values.size() > valuesSuperset.size()) valuesSuperset = values;
         }
 
@@ -235,11 +229,11 @@ public class MRFNode {
             }
         }
 
-        System.out.println("State - Space size (prior to pruning): " + size);
+//        System.out.println("State - Space size (prior to pruning): " + size);
 //        System.out.println("All possible states for Neighborhood: ");
 //        neighborhoodWorkloadStates.forEach(state -> System.out.println(Arrays.deepToString(state)));
 
-        System.out.println("State - Space size: " + neighborhoodWorkloadStates.size());
+//        System.out.println("State - Space size: " + neighborhoodWorkloadStates.size());
 
         return neighborhoodWorkloadStates;
     }
