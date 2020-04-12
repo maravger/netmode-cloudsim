@@ -1,7 +1,9 @@
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Random;
-import java.util.Scanner;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Array;
+import java.util.*;
 
 public class MRF {
 
@@ -18,19 +20,22 @@ public class MRF {
     private static int apps = 2;
     private static int hops = 1;
     private static int gridSize = 3;
-//    private static int[] residualResources = {1, 3, 2};
     private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1};
-//    private static int[][] residualWorkload = {{35, 5}, {0, 0}, {4, 7}};
-//    private static int[][] residualWorkload = {{22, 35}, {22, 35}, {0, 0}, {0, 0}, {22, 35}, {0, 0}, {0, 0}, {0, 0}, {16, 27}};
     private static int[][] residualWorkload = {{5, 10}, {5, 10}, {10, 5}, {10, 5}, {5, 5}, {10, 5}, {10, 10}, {10, 5}, {5, 10}};
-//    private static double[][] formationsWorkload = {{36.5, 27.8}, {150.78, 48.4}, {50, 50}, {78, 47.90}, {16.34, 91.09}};
     private static double[][] formationsWorkload = {{37.35, 41.35}, {82.24, 37.35}, {74.7, 37.35}, {119.59, 37.35},
         {112.05, 37.35}, {37.35, 82.24}, {82.24, 82.24}, {74.7, 82.24}, {37.35, 74.7}, {82.24, 74.7}, {74.7, 74.7}, {37.35, 119.59}, {37.35, 112.05}};
-//    private static int[] powerConsumption = {3000, 6000, 4000, 4500, 4200}; // for each formation
     private static int[] powerConsumption = {2800, 3000, 4200, 4400, 5600, 3000, 3200, 4400, 4200, 4400, 5600, 4400, 5600};
     private static MRFNode[] nodes;
+    private static String timeStamp;
 
     public static void balanceLoadBetweenPois(int[][] residualWorkload, int[] residualResources) {
+        double[] totalVc = new double[nodes.length];
+
+        // Initialize Vcs with a big number
+        for (int i = 0; i < totalVc.length; i++)
+            totalVc[i] = 100;
+
+//        updateVcCSVs(0, Arrays.stream(totalVc).sum());
         System.out.println("Starting Workload balance: " + "\n");
         for (int i = 0; i < nodes.length; i++) {
             System.out.print(String.format("%8s", Arrays.toString(nodes[i].currentWorkload)));
@@ -43,10 +48,8 @@ public class MRF {
             System.out.println("------------------------------------------------------------------------\n");
             System.out.println("Sweep: " + sweep + "\n");
             for (MRFNode mainNode: nodes) {
-//                MRFNode mainNode = nodes[0]; // TODO iterate over nodes
 //                System.out.println("Checking Main Node with id: " + mainNode.id);
                 ArrayList<int[][]> feasibleNeighborhoodStates = mainNode.calculateFeasibleNeighborhoodWorkloadStates();
-//                promptEnterKey();
                 double[] neighborhoodStatesTp = new double[feasibleNeighborhoodStates.size()]; // goes hand in hand with the above array
                 double[] neighborhoodStatesVc = new double[feasibleNeighborhoodStates.size()]; // goes hand in hand with the above array
                 double[] neighborhoodStatesP = new double[feasibleNeighborhoodStates.size()]; // goes hand in hand with the above array
@@ -79,9 +82,6 @@ public class MRF {
 
 //                        System.out.println("Calculating V1...");
                         v1 = A * state.getPowerConsumption() * (1 + Arrays.stream(sigMainNodeWorkload).sum());
-//                        v1 = A * state.getPowerConsumption() * Arrays.stream(sigMainNodeWorkload).sum(); // previous
-//                        v1 = A * state.getPowerConsumption()/1000 * Arrays.stream(sigMainNodeWorkload).sum();
-
 //                        System.out.println("Calculating V2...");
                         v2 = 0;
                         for (int n = 1; n <= mainNode.neighbors.size(); n++) {
@@ -109,11 +109,6 @@ public class MRF {
 //                                        Arrays.toString(neighborState.getResources()) + ", Max Workload: "
 //                                        + Arrays.toString(neighborState.getWorkload()) + ", Power Consumption: "
 //                                        + neighborState.getPowerConsumption());
-//                                v2 += B * dotProduct(mainNodeWorkload, neighborNodeWorkload);
-//                                v2 += B * dotProduct(sigMainNodeWorkload, sigNeighborNodeWorkload);
-//                                v2 += B * state.getPowerConsumption()/1000 *
-//                                  neighborState.getPowerConsumption()/1000 * dotProduct(sigMainNodeWorkload, sigNeighborNodeWorkload);
-//                                v2 += B * (dotProduct(mainNodeWorkload, neighborNodeWorkload) + C * Arrays.stream(sigNeighborNodeWorkload).sum());
                                 v2 += B * dotProduct(mainNodeWorkload, neighborNodeWorkload)
                                         + A * neighborState.getPowerConsumption() * (1 + Arrays.stream(sigNeighborNodeWorkload).sum());
                             } else {
@@ -135,7 +130,6 @@ public class MRF {
 //                    System.out.println("Tp(i): " + neighborhoodStatesTp[i]);
 //                    System.out.println("Tp[array]: " + Arrays.toString(neighborhoodStatesTp));
 //                    System.out.println("------------------------------------------------------------------------\n");
-//                  promptEnterKey();
                     i++;
                 }
 //                System.out.println("------------------------------------------------------------------------\n");
@@ -182,12 +176,16 @@ public class MRF {
                 int[][] feasibleNeighborhoodState = feasibleNeighborhoodStates.get(nextStateIdx);
 //                System.out.println("...which corresponds to neighborhood state: " +
 //                        Arrays.deepToString(feasibleNeighborhoodState));
-//                System.out.println("...and Vc: " + neighborhoodStatesVc[nextStateIdx]);
+//                System.out.println("Vc: " + neighborhoodStatesVc[nextStateIdx]);
+//                System.out.println("Vm Formation Workload: " + Arrays.toString(mainNode.currentResourcesState.getWorkload()));
                 mainNode.updateState(feasibleNeighborhoodState[0]);
                 for (int n = 1; n <= mainNode.neighbors.size(); n++) {
                     MRFNode neighbor = mainNode.neighbors.get(n - 1);
                     neighbor.updateState(feasibleNeighborhoodState[n]);
                 }
+
+                // Update Vc array:
+//                totalVc[mainNode.id] = neighborhoodStatesVc[nextStateIdx];
 //                promptEnterKey();
             }
             System.out.println("Current Workload balance: " + "\n");
@@ -198,6 +196,7 @@ public class MRF {
                 else
                     System.out.print(" | ");
             }
+            System.out.println("--------------------------------------");
             System.out.println("\nCurrent Energy Consumption: " + "\n");
             for (int i = 0; i < nodes.length; i++) {
                 System.out.print(String.format("%5s",nodes[i].currentResourcesState.getPowerConsumption()));
@@ -206,10 +205,68 @@ public class MRF {
                 else
                     System.out.print(" | ");
             }
+            System.out.println("--------------------------------------");
+            // Recalculate total Vcs array
+            totalVc = recalculateTotalVc();
+            System.out.println("State Vcs: " + Arrays.toString(totalVc));
+            System.out.println("Vc Sum: " + Arrays.stream(totalVc).sum());
+            updateVcCSVs(sweep, Arrays.stream(totalVc).sum());
         }
     }
 
-    public static MRFNode[] createMRFGrid(int gridSIze) {
+    private static double[] recalculateTotalVc() {
+        double[] totalVc = new double[nodes.length];
+
+        for (MRFNode mainNode: nodes) {
+//            System.out.println("Main Node: " + mainNode.id);
+//            System.out.println("Neighbors: " + mainNode.neighbors.size());
+            int[] mainNodeWorkload = mainNode.currentWorkload;
+            MRFNode.MRFNodeState state = mainNode.currentResourcesState;
+            double[] sigMainNodeWorkload = new double[mainNodeWorkload.length];
+            for (int s = 0; s < mainNodeWorkload.length; s++)
+                sigMainNodeWorkload[s] = revSigmoid(mainNodeWorkload[s], X0_PERC * state.getWorkload()[s]);
+            double v1 = A * state.getPowerConsumption() * (1 + Arrays.stream(sigMainNodeWorkload).sum());
+            int v2 = 0;
+            for (int n = 1; n <= mainNode.neighbors.size(); n++) {
+//                System.out.println("Checking Neighbor: " + mainNode.neighbors.get(n - 1).id);
+                int[] neighborNodeWorkload = mainNode.neighbors.get(n - 1).currentWorkload;
+                MRFNode.MRFNodeState neighborState = mainNode.neighbors.get(n - 1).currentResourcesState;
+                double[] sigNeighborNodeWorkload = new double[neighborNodeWorkload.length];
+                for (int s = 0; s < neighborNodeWorkload.length; s++)
+                    sigNeighborNodeWorkload[s] =
+                            revSigmoid(neighborNodeWorkload[s], X0_PERC * neighborState.getWorkload()[s]);
+                v2 += B * dotProduct(mainNodeWorkload, neighborNodeWorkload)
+                        + A * neighborState.getPowerConsumption() * (1 + Arrays.stream(sigNeighborNodeWorkload).sum());
+            }
+            double vc = v1 + v2;
+            totalVc[mainNode.id] = vc;
+        }
+
+        return totalVc;
+    }
+
+    private static void updateVcCSVs(int sweepNo, double Vc) {
+        // MRF Evaluation
+        // Initiate files if not present
+        String fileName = "(" + timeStamp + ")MRF.csv";
+        File csvFile = new File(System.getProperty("user.dir") + "/evaluation_results/MRF/" + fileName);
+        StringBuilder sb = new StringBuilder();
+        if(!csvFile.isFile()) {
+            sb.append("Sweep, Vc\n");
+        }
+        try {
+            BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
+
+            sb.append(sweepNo + "," + String.format("%.2f", Vc) + "\n");
+
+            br.write(sb.toString());
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static MRFNode[] createMRFGrid(int gridSIze) {
         MRFNode[] nodes = new MRFNode[gridSIze * gridSIze];
         int id = 0;
 
@@ -223,7 +280,7 @@ public class MRF {
         return nodes;
     }
 
-    public static void createNeighborhoods(MRFNode[] nodes, int hops) {
+    private static void createNeighborhoods(MRFNode[] nodes, int hops) {
         for (int i = 0; i < nodes.length; i++) {
             MRFNode mainNode = nodes[i];
             for (int j = 0; j < nodes.length; j++) {
@@ -256,16 +313,6 @@ public class MRF {
         return (L - (L / (1 + Math.pow(Math.E, (-1 * k * (x - x0))))));
     }
 
-    private static double dotProduct(double[] vectA, double[] vectB) {
-        double product = 0;
-        int n = vectA.length;
-        // Loop to calculate dot product
-        for (int i = 0; i < n; i++)
-            product += vectA[i] * vectB[i];
-        return product;
-    }
-
-    // Overload
     private static double dotProduct(int[] vectA, int[] vectB) {
         double product = 0;
         int n = vectA.length;
@@ -290,8 +337,10 @@ public class MRF {
         MRFNode.formationsPowerConsumption = powerConsumption;
         MRFNode.formationsWorkload = formationsWorkload;
         MRFNode.relaxationFactor = RELAXATION_FACTOR;
+
+        timeStamp = String.valueOf(new Date());
+
         nodes = createMRFGrid(gridSize);
-        promptEnterKey();
         balanceLoadBetweenPois(residualWorkload, residualResources);
     }
 }

@@ -410,6 +410,7 @@ public class NetmodeSim {
         double k = 0.6; // k is the fraction of power consumed by an idle server (usually around 70%)
 
         for (int permutation = 0; permutation < totalFormations; permutation++) {
+            energyConsumption[permutation] = k * pMax;
 //            System.out.println(Arrays.deepToString(feasibleFormations.get(permutation)));
             for (int app = 0; app < APPS; app++) {
                 for (int flavorCores : feasibleFormations.get(permutation)[app]) {
@@ -419,7 +420,7 @@ public class NetmodeSim {
                     // in a server with an error below 5%
                     energyConsumption[permutation] +=
 //                            calculateVmPowerConsumption(serverCores, ArrayUtils.indexOf(VM_PES[app], flavorCores), k, pMax);
-                            calculateVmPowerConsumption(serverCores, flavorCores, k, pMax);
+                            calculateVmPowerConsumption(serverCores, flavorCores, k, pMax) / 120;
 //                    System.out.println(energyConsumption[permutation]);
                 }
             }
@@ -431,7 +432,7 @@ public class NetmodeSim {
     }
 
     private double calculateVmPowerConsumption(int serverCores, int vmCores, double k, double pMax) {
-        return k * pMax + ((1 - k) * pMax * vmCores / serverCores);
+        return ((1 - k) * pMax * vmCores / serverCores);
     }
 
     private ArrayList<int[][]> calculateFeasibleServerFormations(int serverCores, int[][] flavorCores) {
