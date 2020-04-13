@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 360;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 3600;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -58,16 +58,18 @@ public class NetmodeSim {
     // VM related constants
     private static final int[][] VM_PES = {{1, 2, 4}, {1, 2, 4}}; // [app][flavor]
     private static final int[][] VM_PE_MIPS = {{2000, 2000, 2000}, {2000, 2000, 2000}};
-    private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}};
-    private static final double[][] VM_GUARANTEED_MAX_RR = {{50.00, 110.00, 210.00}, {50.00, 110.00, 210.00}};
+//    private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}}; // old ops
+    private static final double[][] VM_GUARANTEED_AVG_RR = {{11, 27, 59}, {37.35, 82.24, 172.68}}; // new ops
     private static final int VM_RAM = 4096;
     private static final int VM_BW = 200000;
     private static final double UNDERUTILISED_VM_CUTOFF = 0.5;
 
     // Task related constants
     private static final int TASK_PES = 1;
-    private static final int TASK_LENGTH = 1000;
-    private static final double[] APP_REQUEST_RATE_PER_USER = {3, 7}; // needed in order to make a sound translation
+//    private static final int TASK_LENGTH = {1000, 1000}; // old ops
+    private static final int[] TASK_LENGTH = {3000, 1000};
+//    private static final double[] APP_REQUEST_RATE_PER_USER = {3, 7}; // needed in order to make a sound translation // old ops
+    private static final double[] APP_REQUEST_RATE_PER_USER = {1, 7}; // needed in order to make a sound translation
     private static final int[][] CELL_OFFLOADING_DISTANCE_INDEX = {{1, 1, 4}, {3, 1, 2}, {4, 4, 2}};
 
     // Various "global" variables
@@ -718,7 +720,7 @@ public class NetmodeSim {
 
         int submissionDelay = 0;
         for (int i = 0; i < noOfTasks; i++) {
-            final TaskSimple task = new TaskSimple(TASK_LENGTH, TASK_PES, utilizationModel);
+            final TaskSimple task = new TaskSimple(TASK_LENGTH[app], TASK_PES, utilizationModel);
             task.setUtilizationModelRam(UtilizationModel.NULL); // TODO: reconsider if we care about RAM and BW Utilization
             task.setUtilizationModelBw(UtilizationModel.NULL);
             task.setId(Long.parseLong((poi * 10 + app) + Integer.toString(taskCounter[poi][app])));

@@ -7,12 +7,17 @@ import java.util.*;
 
 public class MRF {
 
+//    private static final double A = 1/1000.0;
+//    private static final double B = 10/1000.0;
+//    private static final double C = A;
+    private static final double B = 50/1000.0;
     private static final double A = 1/1000.0;
-    private static final double B = 10/1000.0;
+//    private static final double B = 100/1000.0; // converges too fast
+    private static final double C = 1/2000.0;
     private static final double L = 1;
     private static final double k = 5;
     private static final double C0 = 2;
-    private static final int SWEEPS = 20;
+    private static final int SWEEPS = 1000;
     private static final double X0_PERC = 0.5;
     private static final int RELAXATION_FACTOR = 5;
     private static final int MAX_NEIGHBORHOOD_SIZE = 3; // If bigger, problem becomes too computationally intensive!!
@@ -22,9 +27,11 @@ public class MRF {
     private static int gridSize = 3;
     private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1};
     private static int[][] residualWorkload = {{5, 10}, {5, 10}, {10, 5}, {10, 5}, {5, 5}, {10, 5}, {10, 10}, {10, 5}, {5, 10}};
-    private static double[][] formationsWorkload = {{37.35, 41.35}, {82.24, 37.35}, {74.7, 37.35}, {119.59, 37.35},
+//    private static double[][] formationsWorkload = {{37.35, 41.35}, {82.24, 37.35}, {74.7, 37.35}, {119.59, 37.35},
+    private static double[][] formationsWorkload = {{37.35, 37.35}, {82.24, 37.35}, {74.7, 37.35}, {119.59, 37.35},
         {112.05, 37.35}, {37.35, 82.24}, {82.24, 82.24}, {74.7, 82.24}, {37.35, 74.7}, {82.24, 74.7}, {74.7, 74.7}, {37.35, 119.59}, {37.35, 112.05}};
     private static int[] powerConsumption = {2800, 3000, 4200, 4400, 5600, 3000, 3200, 4400, 4200, 4400, 5600, 4400, 5600};
+    // private static int[] powerConsumption = {1600, 1800, 1800, 2000, 2000, 1800, 2000, 2000, 1800, 2000, 2000, 2000, 2000};
     private static MRFNode[] nodes;
     private static String timeStamp;
 
@@ -110,7 +117,7 @@ public class MRF {
 //                                        + Arrays.toString(neighborState.getWorkload()) + ", Power Consumption: "
 //                                        + neighborState.getPowerConsumption());
                                 v2 += B * dotProduct(mainNodeWorkload, neighborNodeWorkload)
-                                        + A * neighborState.getPowerConsumption() * (1 + Arrays.stream(sigNeighborNodeWorkload).sum());
+                                        + C * neighborState.getPowerConsumption() * (1 + Arrays.stream(sigNeighborNodeWorkload).sum());
                             } else {
 //                                System.out.println("No matching Neighbor Node Resource State found!");
                                 v2 = Integer.MAX_VALUE;
@@ -236,7 +243,7 @@ public class MRF {
                     sigNeighborNodeWorkload[s] =
                             revSigmoid(neighborNodeWorkload[s], X0_PERC * neighborState.getWorkload()[s]);
                 v2 += B * dotProduct(mainNodeWorkload, neighborNodeWorkload)
-                        + A * neighborState.getPowerConsumption() * (1 + Arrays.stream(sigNeighborNodeWorkload).sum());
+                        + C * neighborState.getPowerConsumption() * (1 + Arrays.stream(sigNeighborNodeWorkload).sum());
             }
             double vc = v1 + v2;
             totalVc[mainNode.id] = vc;
@@ -257,7 +264,7 @@ public class MRF {
         try {
             BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
 
-            sb.append(sweepNo + "," + String.format("%.2f", Vc) + "\n");
+            sb.append(sweepNo + ";" + String.format("%.2f", Vc) + "\n");
 
             br.write(sb.toString());
             br.close();
@@ -281,6 +288,34 @@ public class MRF {
     }
 
     private static void createNeighborhoods(MRFNode[] nodes, int hops) {
+        for (int i = 0; i < nodes.length; i++) {
+            MRFNode mainNode = nodes[i];
+            for (int j = 0; j < nodes.length; j++) {
+                if (i == j) continue;
+                MRFNode candidateNeighbor = nodes[j];
+                // Neighboring condition
+                int xDist = Math.abs(candidateNeighbor.pos.x - mainNode.pos.x);
+                int yDist = Math.abs(candidateNeighbor.pos.y - mainNode.pos.y);
+                if ((xDist <= hops) && (yDist <= hops) && (xDist != yDist)) {
+                    mainNode.addNeighbor(candidateNeighbor);
+//                    System.out.println("Node with id: " + mainNode.id + " and position: " + mainNode.pos.x + "," +
+//                            mainNode.pos.y + " has neighbor: " + candidateNeighbor.id);
+                }
+            }
+            // Check if neighborhood has reached max state
+            if (mainNode.neighbors.size() > MAX_NEIGHBORHOOD_SIZE - 1) {
+//                System.out.println("Neighborhood is too big, randomly removing some neighbors");
+                Random rand = new Random();
+                // If so, randomly remove neighbors until neighborhood has the desired size
+                while (mainNode.neighbors.size() > MAX_NEIGHBORHOOD_SIZE - 1) {
+                    int index = rand.nextInt(mainNode.neighbors.size());
+                    mainNode.neighbors.remove(index);
+                }
+            }
+        }
+    }
+
+    private static void createTemporaryNeighborhoods(MRFNode[] nodes, int hops) {
         for (int i = 0; i < nodes.length; i++) {
             MRFNode mainNode = nodes[i];
             for (int j = 0; j < nodes.length; j++) {
