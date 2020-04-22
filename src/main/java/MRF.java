@@ -19,14 +19,20 @@ public class MRF {
     private static final double C0 = 2;
     private static final int SWEEPS = 1000;
     private static final double X0_PERC = 0.5;
-    private static final int RELAXATION_FACTOR = 5;
+    private static final int RELAXATION_FACTOR = 10;
     private static final int MAX_NEIGHBORHOOD_SIZE = 3; // If bigger, problem becomes too computationally intensive!!
 
     private static int apps = 2;
     private static int hops = 1;
-    private static int gridSize = 3;
-    private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1};
-    private static int[][] residualWorkload = {{5, 10}, {5, 10}, {10, 5}, {10, 5}, {5, 5}, {10, 5}, {10, 10}, {10, 5}, {5, 10}};
+//    private static int gridSize = 3; // for 3x3
+    private static int gridSize = 6;
+//    private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1}; //for 3x3
+    private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 0, 0, 1, 1, 1, 0, 2, 2, 2, 1, 1};
+//    private static int[][] residualWorkload = {{5, 10}, {5, 10}, {10, 5}, {10, 5}, {5, 5}, {10, 5}, {10, 10}, {10, 5}, {5, 10}}; // for 3x3
+    private static int[][] residualWorkload = {{5, 10}, {0, 0}, {10, 5}, {0, 0}, {0, 0}, {10, 5}, {0, 0}, {10, 5}, {0, 0},
+        {0, 0}, {5, 10}, {0, 0}, {10, 5}, {0, 0}, {10, 5}, {0, 0}, {0, 0}, {5, 10},
+        {5, 10}, {0, 0}, {10, 5}, {0, 0}, {5, 5},{0, 0}, {10, 10}, {0, 0}, {5, 10},
+        {0, 0}, {0, 0}, {10, 5}, {10, 5}, {5, 5}, {0, 0}, {0, 0}, {10, 5}, {5, 10}};
 //    private static double[][] formationsWorkload = {{37.35, 41.35}, {82.24, 37.35}, {74.7, 37.35}, {119.59, 37.35},
     private static double[][] formationsWorkload = {{37.35, 37.35}, {82.24, 37.35}, {74.7, 37.35}, {119.59, 37.35},
         {112.05, 37.35}, {37.35, 82.24}, {82.24, 82.24}, {74.7, 82.24}, {37.35, 74.7}, {82.24, 74.7}, {74.7, 74.7}, {37.35, 119.59}, {37.35, 112.05}};
