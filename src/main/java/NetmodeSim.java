@@ -97,6 +97,8 @@ public class NetmodeSim {
     private double[][] intervalPredictedTasks;
     private int[] poiAllocatedCores;
     private int[] poiPowerConsumption;
+    private int[][] allocatedUsers;
+    private int[][] allocatedCores;
 
     public static void main(String[] args) {
         new NetmodeSim();
@@ -118,6 +120,8 @@ public class NetmodeSim {
         taskCounter = new int[POI][APPS];
         poiAllocatedCores = new int[POI];
         poiPowerConsumption = new int[POI];
+        allocatedUsers = new int[POI][APPS];
+        allocatedCores = new int[POI][APPS];
 
         simData = csvm.readSimCSVData();
         firstEvent = true;
@@ -182,7 +186,7 @@ public class NetmodeSim {
 
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
-                            accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption);
+                            accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -371,10 +375,16 @@ public class NetmodeSim {
         // Calculate Hosts' power consumption and total allocated cores
         poiPowerConsumption = new int[POI];
         poiAllocatedCores = new int[POI];
+        allocatedCores = new int[POI][APPS];
         for (poi = 0; poi < POI; poi++) {
             for (int hostType : vmPlacement[poi]) {
                 for (int app = 0; app < APPS; app++) {
+//                    System.out.println("Poi: " + poi + ", App: " + app);
+//                    System.out.println(IntStream.of(feasibleFormations.get(hostType)[app]).sum());
                     poiAllocatedCores[poi] += IntStream.of(feasibleFormations.get(hostType)[app]).sum();
+//                    System.out.println("Total Allocated Cores: " + poiAllocatedCores[poi]);
+                    allocatedCores[poi][app] += IntStream.of(feasibleFormations.get(hostType)[app]).sum();
+//                    System.out.println("App Allocated Cores: " + allocatedCores[poi][app]);
                 }
                 poiPowerConsumption[poi] += powerConsumption[hostType];
             }
@@ -616,6 +626,15 @@ public class NetmodeSim {
                         requestRatePerCellPerApp[i][j][app] = 0;
                     }
                 }
+            }
+        }
+        int poi = 0;
+        for (int i = 0; i < GRID_SIZE; i++) {
+            for (int j = 0; j < GRID_SIZE; j++) {
+                for (int app = 0; app < APPS; app++) {
+                    allocatedUsers[poi][app] = assignedUsers[i][j][app];
+                }
+                poi++;
             }
         }
         System.out.println("Assigned Users: " + Arrays.deepToString(assignedUsers));
