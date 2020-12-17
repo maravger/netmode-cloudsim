@@ -49,6 +49,7 @@ public class FcmSim {
 
     // Task related constants
     private static final int TASK_PES = 1;
+    private static final int TASK_SIZE = 1024; // in Kb
     private static final int[] TASK_LENGTH = {3000};
 
     private Double[][] simData;
@@ -115,7 +116,6 @@ public class FcmSim {
             // If a full interval has been completed or first interval, predict group movement, optimize vm placement,
             // actually move group, generate request rate per cell
             if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || firstEvent) {
-
                 if (!firstEvent) {
                     // Collect Stats and present them
                     IntervalStats stats = collectTaskStats();
@@ -142,7 +142,8 @@ public class FcmSim {
                 correctlySetVmDescriptions(vmList[0][0]);
 
                 // Change request rate based on the users
-                requestRatePerCell = createRequestRate();
+                int[][][] assignedUsers = createAssignedUsers(10);
+                requestRatePerCell = createRequestRate(assignedUsers);
 
                 // First interval arrangements are now over
                 if (firstEvent) firstEvent = false;
@@ -272,10 +273,15 @@ public class FcmSim {
         }
     }
 
-    private double[][][] createRequestRate() {
-        double[] appRequestRatePerUser = {1};
-        int randomNumberOfUsers = new Random().nextInt(10);
+    private int[][][] createAssignedUsers (int bound) {
+        int randomNumberOfUsers = new Random().nextInt(bound);
         int[][][] assignedUsers = {{{randomNumberOfUsers}}};
+
+        return assignedUsers;
+    }
+
+    private double[][][] createRequestRate(int[][][] assignedUsers) {
+        double[] appRequestRatePerUser = {1};
         double[][][] requestRatePerCellPerApp = new double[GRID_SIZE][GRID_SIZE][APPS];
         int dataRow, dataCol;
 
@@ -347,7 +353,7 @@ public class FcmSim {
             task.setUtilizationModelRam(UtilizationModel.NULL); // TODO: reconsider if we care about RAM and BW Utilization
             task.setUtilizationModelBw(UtilizationModel.NULL);
             task.setId(Long.parseLong((poi * 10 + app) + Integer.toString(taskCounter[poi][app])));
-            task.setSizes(1024);
+            task.setSizes(TASK_SIZE);
             task.setSubmissionDelay(submissionDelay);
             task.setBroker(edgeBroker[poi]);
             tempTaskList.add(task);
@@ -375,6 +381,46 @@ public class FcmSim {
     private void correctlySetVmDescriptions(ArrayList<Vm> vmList) {
         for (Vm vm: vmList)
             vm.setDescription("{\"App\": " + "0" + " }"); // Vm Description in Json format
+    }
+
+    private double[] calculateUsersTransmissionRate(int numberOfUsers, int[] userDistance){
+        double B = 20 * 180 * Math.pow(10, 3); // Resource Blocks * kHz, Bandwidth.
+        double[] sinr = new double[numberOfUsers]; // SINR (signal to interference plus noise ratio).
+        double[] gnk = new double[numberOfUsers]; // channel gain per user.
+        double[] trate = new double[numberOfUsers]; // channel gain per user.
+        double p = 0.2; // W, or 23dBm assume p = pmax for each user, as we do not incorporate power management.
+        double h = 0.97; // just a constant.
+        int a = -3; // the path loss exponent which corresponds to urban and suburban environments.
+        double sigma2 = Math.pow(10, (-14.4)) * B; // W, noise power at the BS
+
+//        System.out.println(sigma2);
+
+        // calculate channel gain for each user, based on their distance:
+        for (int i = 0; i < numberOfUsers; i++) {
+            gnk[i] = h * Math.pow(userDistance[i], a);
+        }
+//        System.out.println(Arrays.toString(gnk));
+
+        // calculate sinr for each user, based on their channel gain:
+        for (int i = 0; i < numberOfUsers; i++) {
+            double sum = 0;
+            for (int j = 0; j < numberOfUsers; j++) {
+                if (j != i) {
+                    sum += p * gnk[j];
+                }
+            }
+//            System.out.println(p * gnk[i]);
+//            System.out.println(sum);
+            sinr[i] = (p * gnk[i]) / (sum + sigma2);
+        }
+//        System.out.println(Arrays.toString(sinr));
+
+        // calculate transmission rate for each user, based on their sinr:
+        for (int i = 0; i < numberOfUsers; i++) {
+            trate[i] = B * Math.log(1 + sinr[i]);
+        }
+
+        return trate;
     }
 
     private void runSimulationAndPrintResults() {
