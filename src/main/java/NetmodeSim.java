@@ -99,6 +99,7 @@ public class NetmodeSim {
     private int[] poiPowerConsumption;
     private int[][] allocatedUsers;
     private int[][] allocatedCores;
+    private double[][] avgSinr;
 
     public static void main(String[] args) {
         new NetmodeSim();
@@ -122,6 +123,7 @@ public class NetmodeSim {
         poiPowerConsumption = new int[POI];
         allocatedUsers = new int[POI][APPS];
         allocatedCores = new int[POI][APPS];
+        avgSinr = new double[POI][APPS];
 
         simData = csvm.readSimCSVData();
         firstEvent = true;
@@ -186,7 +188,7 @@ public class NetmodeSim {
 
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
-                            accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores);
+                            accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores, avgSinr);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();

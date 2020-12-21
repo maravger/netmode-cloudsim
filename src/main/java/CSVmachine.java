@@ -49,7 +49,7 @@ public final class CSVmachine implements SignalHandler{
                                                    int[][] intervalFinishedTasks, int[][] intervalAdmittedTasks,
                                                    double[][] accumulatedResponseTime, HashMap<Long, Double> accumulatedCpuUtil,
                                                    int[] poiAllocatedCores, int[] poiPowerConsumption,
-                                                   int[][] allocatedUsers, int[][] allocatedCores) {
+                                                   int[][] allocatedUsers, int[][] allocatedCores, double[][] avgSinr) {
         // Print to console
         System.out.printf("%n%n------------------------- INTERVAL INFO --------------------------%n%n");
         System.out.printf(" POI | App | Admitted Tasks | Finished Tasks | Average Throughput | Average Response Time \n");
@@ -78,7 +78,7 @@ public final class CSVmachine implements SignalHandler{
 
         System.out.println("...Updating Interval App Performance CSVs");
         this.updateIntervalAppPerformanceCSVs(intervalNo, intervalAdmittedTasks, intervalFinishedTasks,
-                accumulatedResponseTime, allocatedUsers, allocatedCores);
+                accumulatedResponseTime, allocatedUsers, allocatedCores, avgSinr);
 
         System.out.println("...Updating Interval Host Performance CSVs");
         this.updateIntervalPoiPerformanceCSVs(intervalNo, poiPowerConsumption, poiAllocatedCores);
@@ -259,7 +259,7 @@ public final class CSVmachine implements SignalHandler{
 
     private void updateIntervalAppPerformanceCSVs(int intervalNo, int[][] admittedTasks, int[][] finishedTasks,
                                                   double[][] accumulatedResponseTime, int[][] allocatedUsers,
-                                                  int[][] allocatedCores) {
+                                                  int[][] allocatedCores, double[][] avgSinr) {
         // App Performance evaluation
         for (int poi = 0; poi < this.pois; poi++) {
             for (int app = 0; app < this.apps; app++) {
@@ -269,7 +269,8 @@ public final class CSVmachine implements SignalHandler{
                 StringBuilder sb = new StringBuilder();
                 if(!csvFile.isFile()) {
 //                    System.out.println("File does not exist!");
-                    sb.append("Interval, Admitted, Finished, AvgThroughput, AvgResponseTime, AllocatedUsers, AllocatedCores\n");
+                    sb.append("Interval, Admitted, Finished, AvgThroughput, AvgResponseTime, AllocatedUsers, " +
+                            "AllocatedCores, AvgSINR\n");
                 }
                 try {
                     BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
@@ -277,7 +278,8 @@ public final class CSVmachine implements SignalHandler{
                     sb.append(intervalNo + "," + admittedTasks[poi][app] + "," + finishedTasks[poi][app] + "," +
                             String.format("%.2f", finishedTasks[poi][app] / (double) this.samplingInterval) + "," +
                             String.format("%.2f", accumulatedResponseTime[poi][app] / finishedTasks[poi][app]) + "," +
-                            allocatedUsers[poi][app] + "," + allocatedCores[poi][app] + "\n");
+                            allocatedUsers[poi][app] + "," + allocatedCores[poi][app] + "," +
+                            String.format("%.2f", avgSinr[poi][app]) + "\n");
 
                     br.write(sb.toString());
                     br.close();

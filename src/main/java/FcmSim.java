@@ -26,13 +26,12 @@ import java.util.*;
 public class FcmSim {
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 600;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 120;
     private static final int POI = 1;
     private static final int APPS = 1;
     private static final int SAMPLING_INTERVAL = 30;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int GRID_SIZE = 1;
-    private static final int[][] CELL_OFFLOADING_DISTANCE_INDEX = {{1}};
 
     // Edge Servers related constants
     private static final int EDGE_HOSTS = 3;
@@ -49,8 +48,8 @@ public class FcmSim {
 
     // Task related constants
     private static final int TASK_PES = 1;
-    private static final int TASK_SIZE = 1024; // in Kb
-    private static final int[] TASK_LENGTH = {3000};
+    private static final int TASK_SIZE = 102400; // in Kb
+    private static final int[] TASK_LENGTH = {100}; // in MI
 
     private Double[][] simData;
     private Boolean firstEvent;
@@ -65,9 +64,11 @@ public class FcmSim {
     private int[] poiPowerConsumption;
     private int[][] allocatedUsers;
     private int[][] allocatedCores;
+    private double[][] avgSinr;
     private HashMap<Long, Double> accumulatedCpuUtil;
     private ArrayList<TaskSimple>[][] taskList;
     private int [][] taskCounter;
+    private User[] assignedUsers;
 
     private final CloudSim simulation = new CloudSim();
 
@@ -86,6 +87,7 @@ public class FcmSim {
         allocatedUsers = new int[POI][APPS];
         allocatedCores = new int[POI][APPS];
         intervalPredictedTasks = new double[POI][APPS];
+        avgSinr = new double[POI][APPS];
 
         // Archive previous Simulation results
         csvm.archiveSimulationCSVs();
@@ -128,7 +130,8 @@ public class FcmSim {
 
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
-                            accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores);
+                            accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
+                            avgSinr);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -142,8 +145,8 @@ public class FcmSim {
                 correctlySetVmDescriptions(vmList[0][0]);
 
                 // Change request rate based on the users
-                int[][][] assignedUsers = createAssignedUsers(10);
-                requestRatePerCell = createRequestRate(assignedUsers);
+                assignedUsers = createAssignedUsers(0, 10, 50, 70);
+                requestRatePerCell = new double[][][]{{{createRequestRate(assignedUsers)}}};
 
                 // First interval arrangements are now over
                 if (firstEvent) firstEvent = false;
@@ -273,47 +276,29 @@ public class FcmSim {
         }
     }
 
-    private int[][][] createAssignedUsers (int bound) {
-        int randomNumberOfUsers = new Random().nextInt(bound);
-        int[][][] assignedUsers = {{{randomNumberOfUsers}}};
+    private User[] createAssignedUsers (int usersLowerBound, int usersUpperBound, int distLowerBound, int distUpperBound) {
+        int randomNumberOfUsers = usersLowerBound + new Random().nextInt(usersUpperBound-usersLowerBound);
+        User[] user = new User[randomNumberOfUsers];
 
-        return assignedUsers;
+        // create users with random distance from BS and remaining energy
+        for (int i = 0; i < randomNumberOfUsers; i++) {
+            double distance = distLowerBound + new Random().nextInt(distUpperBound-distLowerBound);
+            double remainingEnergy = new Random().nextInt(100);
+            user[i] = new User(distance, remainingEnergy);
+        }
+        allocatedUsers[0][0] = user.length;
+        return user;
     }
 
-    private double[][][] createRequestRate(int[][][] assignedUsers) {
-        double[] appRequestRatePerUser = {1};
-        double[][][] requestRatePerCellPerApp = new double[GRID_SIZE][GRID_SIZE][APPS];
-        int dataRow, dataCol;
+    private int createRequestRate(User[] assignedUsers) {
+        double[] usersTransmissionRate = calculateUsersTransmissionRate(assignedUsers);
+        double totalTransmissionRate = Arrays.stream(usersTransmissionRate).sum();
+        int totalRequestRate = (int) totalTransmissionRate/TASK_SIZE;
 
-        for (int i = 0; i < GRID_SIZE; i++) {
-            for (int j = 0; j < GRID_SIZE; j++) {
-                for (int app = 0; app < APPS; app++) {
-                    if (assignedUsers[i][j][app] != 0) {
-                        int distance = CELL_OFFLOADING_DISTANCE_INDEX[i][j];
-                        dataRow = (assignedUsers[i][j][app] * distance) - 1;
-                        if (dataRow > simData.length) dataRow = simData.length - 1;
-                        dataCol = 12; // TODO: fixed at column 12. Make it Variable
-                        requestRatePerCellPerApp[i][j][app] =
-                                Math.round((simData[dataRow][dataCol] * appRequestRatePerUser[app]) * 100.0) / 100.0;
-                    } else {
-                        requestRatePerCellPerApp[i][j][app] = 0;
-                    }
-                }
-            }
-        }
-        int poi = 0;
-        for (int i = 0; i < GRID_SIZE; i++) {
-            for (int j = 0; j < GRID_SIZE; j++) {
-                for (int app = 0; app < APPS; app++) {
-                    allocatedUsers[poi][app] = assignedUsers[i][j][app];
-                }
-                poi++;
-            }
-        }
-        System.out.println("Assigned Users: " + Arrays.deepToString(assignedUsers));
-        System.out.println("Request Rate to generate: " + Arrays.deepToString(requestRatePerCellPerApp));
+        System.out.println("Assigned Users: " + assignedUsers.length);
+        System.out.println("Request Rate to generate: " + totalRequestRate);
 
-        return requestRatePerCellPerApp;
+        return totalRequestRate;
     }
 
     private void generateRequests(double[][][] requestRatePerCellPerApp, EventInfo evt) {
@@ -325,8 +310,7 @@ public class FcmSim {
                 int poi = GRID_SIZE * i + j;
                 for (int app = 0; app < APPS; app++) {
                     if (requestRatePerCellPerApp[i][j][app] != 0) {
-                        pD = new PoissonDistribution(requestRatePerCell[i][j][app] / SAMPLING_INTERVAL);
-                        tasksToCreate = pD.sample();
+                        tasksToCreate = (int)requestRatePerCellPerApp[i][j][app];
                         taskList[poi][app] = new ArrayList<>();
                         System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n",
                                 tasksToCreate, poi, app, evt.getTime());
@@ -383,11 +367,11 @@ public class FcmSim {
             vm.setDescription("{\"App\": " + "0" + " }"); // Vm Description in Json format
     }
 
-    private double[] calculateUsersTransmissionRate(int numberOfUsers, int[] userDistance){
+    private double[] calculateUsersTransmissionRate(User[] assignedUsers){
         double B = 20 * 180 * Math.pow(10, 3); // Resource Blocks * kHz, Bandwidth.
-        double[] sinr = new double[numberOfUsers]; // SINR (signal to interference plus noise ratio).
-        double[] gnk = new double[numberOfUsers]; // channel gain per user.
-        double[] trate = new double[numberOfUsers]; // channel gain per user.
+        double[] sinr = new double[assignedUsers.length]; // SINR (signal to interference plus noise ratio).
+        double[] gnk = new double[assignedUsers.length]; // channel gain per user.
+        double[] trate = new double[assignedUsers.length]; // channel gain per user.
         double p = 0.2; // W, or 23dBm assume p = pmax for each user, as we do not incorporate power management.
         double h = 0.97; // just a constant.
         int a = -3; // the path loss exponent which corresponds to urban and suburban environments.
@@ -396,15 +380,15 @@ public class FcmSim {
 //        System.out.println(sigma2);
 
         // calculate channel gain for each user, based on their distance:
-        for (int i = 0; i < numberOfUsers; i++) {
-            gnk[i] = h * Math.pow(userDistance[i], a);
+        for (int i = 0; i < assignedUsers.length; i++) {
+            gnk[i] = h * Math.pow(assignedUsers[i].distance, a);
         }
 //        System.out.println(Arrays.toString(gnk));
 
         // calculate sinr for each user, based on their channel gain:
-        for (int i = 0; i < numberOfUsers; i++) {
+        for (int i = 0; i < assignedUsers.length; i++) {
             double sum = 0;
-            for (int j = 0; j < numberOfUsers; j++) {
+            for (int j = 0; j < assignedUsers.length; j++) {
                 if (j != i) {
                     sum += p * gnk[j];
                 }
@@ -415,8 +399,12 @@ public class FcmSim {
         }
 //        System.out.println(Arrays.toString(sinr));
 
+        avgSinr[0][0] = Arrays.stream(sinr).sum()/sinr.length;
+
+//        System.out.println(avgSinr[0][0]);
+
         // calculate transmission rate for each user, based on their sinr:
-        for (int i = 0; i < numberOfUsers; i++) {
+        for (int i = 0; i < assignedUsers.length; i++) {
             trate[i] = B * Math.log(1 + sinr[i]);
         }
 
