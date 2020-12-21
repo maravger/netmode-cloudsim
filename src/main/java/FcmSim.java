@@ -18,7 +18,6 @@ import org.cloudbus.cloudsim.utilizationmodels.UtilizationModel;
 import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelDynamic;
 import org.cloudbus.cloudsim.vms.Vm;
 import org.cloudbus.cloudsim.vms.VmSimple;
-import org.cloudsimplus.builders.tables.CloudletsTableBuilder;
 import org.cloudsimplus.listeners.EventInfo;
 
 import java.util.*;
@@ -26,7 +25,7 @@ import java.util.*;
 public class FcmSim {
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 120;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 3600;
     private static final int POI = 1;
     private static final int APPS = 1;
     private static final int SAMPLING_INTERVAL = 30;
@@ -69,6 +68,7 @@ public class FcmSim {
     private ArrayList<TaskSimple>[][] taskList;
     private int [][] taskCounter;
     private User[] assignedUsers;
+    private double avgResidualEnergy;
 
     private final CloudSim simulation = new CloudSim();
 
@@ -131,7 +131,7 @@ public class FcmSim {
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr);
+                            avgSinr, avgResidualEnergy);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -145,7 +145,7 @@ public class FcmSim {
                 correctlySetVmDescriptions(vmList[0][0]);
 
                 // Change request rate based on the users
-                assignedUsers = createAssignedUsers(0, 10, 50, 70);
+                assignedUsers = createAssignedUsers(2, 10, 50, 70);
                 requestRatePerCell = new double[][][]{{{createRequestRate(assignedUsers)}}};
 
                 // First interval arrangements are now over
@@ -279,14 +279,18 @@ public class FcmSim {
     private User[] createAssignedUsers (int usersLowerBound, int usersUpperBound, int distLowerBound, int distUpperBound) {
         int randomNumberOfUsers = usersLowerBound + new Random().nextInt(usersUpperBound-usersLowerBound);
         User[] user = new User[randomNumberOfUsers];
+        double energySum = 0;
 
         // create users with random distance from BS and remaining energy
         for (int i = 0; i < randomNumberOfUsers; i++) {
             double distance = distLowerBound + new Random().nextInt(distUpperBound-distLowerBound);
-            double remainingEnergy = new Random().nextInt(100);
+            double remainingEnergy = new Random().nextInt(80) + 20; // Battery percentage
+            energySum += remainingEnergy;
             user[i] = new User(distance, remainingEnergy);
         }
+        avgResidualEnergy = energySum / user.length;
         allocatedUsers[0][0] = user.length;
+        System.out.println("Average Residual Energy: " + avgResidualEnergy);
         return user;
     }
 
@@ -372,7 +376,7 @@ public class FcmSim {
         double[] sinr = new double[assignedUsers.length]; // SINR (signal to interference plus noise ratio).
         double[] gnk = new double[assignedUsers.length]; // channel gain per user.
         double[] trate = new double[assignedUsers.length]; // channel gain per user.
-        double p = 0.2; // W, or 23dBm assume p = pmax for each user, as we do not incorporate power management.
+        double pmax = 0.2; // W, or 23dBm assume p = pmax for each user, as we do not incorporate power management.
         double h = 0.97; // just a constant.
         int a = -3; // the path loss exponent which corresponds to urban and suburban environments.
         double sigma2 = Math.pow(10, (-14.4)) * B; // W, noise power at the BS
@@ -388,9 +392,10 @@ public class FcmSim {
         // calculate sinr for each user, based on their channel gain:
         for (int i = 0; i < assignedUsers.length; i++) {
             double sum = 0;
+            double p = assignedUsers[i].remainingEnergy * pmax * 0.01; // P is set opportunistically, in relevance to the device's residual energy
             for (int j = 0; j < assignedUsers.length; j++) {
                 if (j != i) {
-                    sum += p * gnk[j];
+                    sum +=  p * gnk[j];
                 }
             }
 //            System.out.println(p * gnk[i]);
