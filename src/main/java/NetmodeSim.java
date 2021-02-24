@@ -235,7 +235,7 @@ public class NetmodeSim {
 
             // Actually create the requests based on the previously generated request rate and delegate them per VM/app
             if (!CREATE_NMMC_TRANSITION_MATRIX) generateRequests(requestRatePerCell, evt);
-
+            
             // Vm resource usage stats collected per second
             collectVmStats();
 
