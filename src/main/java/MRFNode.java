@@ -15,6 +15,7 @@ public class MRFNode {
     public Coordinates pos;
     public ArrayList<MRFNode> neighbors;
     public int[] currentWorkload;
+    public int[] initialWorkload;
     public MRFNodeState currentResourcesState;
 
     private int residualResources;
@@ -53,6 +54,7 @@ public class MRFNode {
 
         this.currentResourcesState = this.states[0]; // initialize poi state with all servers closed
         this.currentWorkload = residualWorkload; // set current workload as the residual
+        this.initialWorkload = residualWorkload;
     }
 
     public int relaxResidualWorkload(int residualWorkload) {

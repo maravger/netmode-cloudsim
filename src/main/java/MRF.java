@@ -10,15 +10,15 @@ public class MRF {
     // private static final double A = 1/1000.0;
     // private static final double B = 10/1000.0;
     // private static final double C = A;
-    private static final double B = 50/1000.0;
-    private static final double A = 1/1000.0;
+    private static final double B = 50/1000.0; // 50/1000.0
+    private static final double A = 1/1000.0; // 1/1000.0
     // private static final double B = 100/1000.0; // converges too fast
-    private static final double C = 1/2000.0;
-    private static final double D = 1/5.0; // network delay weight
+    private static final double C = 1/2000.0; // 1/2000.0
+    private static final double D = 1/1000.0; // network delay weight
     private static final double L = 1;
     private static final double k = 5;
-    private static final double C0 = 2;
-    private static final int SWEEPS = 1000;
+    private static final double C0 = 1; // was = 2
+    private static final int SWEEPS = 10000;
     private static final int HOP_DELAY = 10; // in ms
     private static final double X0_PERC = 0.5;
     private static final int RELAXATION_FACTOR = 10;
@@ -30,7 +30,7 @@ public class MRF {
     private static int gridSize = 6;
     // private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1}; //for 3x3
     private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 0, 0, 1, 1, 1, 0, 2, 2, 2, 1, 1};
-    // private static int[][] residualWorkload = {{5, 10}, {5, 10}, {10, 5}, {10, 5}, {5, 5}, {10, 5}, {10, 10}, {10, 5}, {5, 10}}; // for 3x3
+    // private static int[][] residualWorkload = {{20, 20}, {0, 10}, {10, 5}, {5, 5}, {0, 0}, {10, 5}, {10, 10}, {10, 0}, {5, 10}}; // for 3x3
     private static int[][] residualWorkload = {{5, 10}, {0, 0}, {10, 5}, {0, 0}, {0, 0}, {10, 5}, {0, 0}, {10, 5}, {0, 0},
         {0, 0}, {5, 10}, {0, 0}, {10, 5}, {0, 0}, {10, 5}, {0, 0}, {0, 0}, {5, 10},
         {5, 10}, {0, 0}, {10, 5}, {0, 0}, {5, 5},{0, 0}, {10, 10}, {0, 0}, {5, 10},
@@ -98,10 +98,10 @@ public class MRF {
                         // calculate node ingress request rate
                         int a = 0;
                         for (int s = 0; s < mainNodeWorkload.length; s++)
-                                if (mainNodeWorkload[s] > mainNode.currentWorkload[s]) {
+                                if (mainNodeWorkload[s] > mainNode.initialWorkload[s]) {
                                     // System.out.println("Cur workload = " + mainNodeWorkload[s]);
                                     // System.out.println("Prev workload = " + mainNode.currentWorkload[s]);
-                                    a += mainNodeWorkload[s] - mainNode.currentWorkload[s];
+                                    a += mainNodeWorkload[s] - mainNode.initialWorkload[s];
                                 }
                         // System.out.println("Calculating V1...");
                         v1 = A * state.getPowerConsumption() * (1 + Arrays.stream(sigMainNodeWorkload).sum()) + (D * (a * HOP_DELAY));
@@ -243,24 +243,27 @@ public class MRF {
         double[] totalVc = new double[nodes.length];
 
         for (MRFNode mainNode: nodes) {
-//            System.out.println("Main Node: " + mainNode.id);
-//            System.out.println("Neighbors: " + mainNode.neighbors.size());
+            // System.out.println("Main Node: " + mainNode.id);
+            // System.out.println("Neighbors: " + mainNode.neighbors.size());
             int[] mainNodeWorkload = mainNode.currentWorkload;
             MRFNode.MRFNodeState state = mainNode.currentResourcesState;
             double[] sigMainNodeWorkload = new double[mainNodeWorkload.length];
             for (int s = 0; s < mainNodeWorkload.length; s++)
                 sigMainNodeWorkload[s] = revSigmoid(mainNodeWorkload[s], X0_PERC * state.getWorkload()[s]);
+            // network delay factor
             int a = 0;
             for (int s = 0; s < mainNodeWorkload.length; s++)
-                if (mainNodeWorkload[s] > mainNode.currentWorkload[s]) {
-                    // System.out.println("Cur workload = " + mainNodeWorkload[s]);
-                    // System.out.println("Prev workload = " + mainNode.currentWorkload[s]);
-                    a += mainNodeWorkload[s] - mainNode.currentWorkload[s];
+                if (mainNodeWorkload[s] > mainNode.initialWorkload[s]) {
+                    // System.out.println("Current workload = " + mainNodeWorkload[s]);
+                    // System.out.println("Initial workload = " + mainNode.initialWorkload[s]);
+                    a += mainNodeWorkload[s] - mainNode.initialWorkload[s];
                 }
+            // System.out.println("A's contribution to v1 = " + (D * ((a * HOP_DELAY))));
+
             double v1 = A * state.getPowerConsumption() * (1 + Arrays.stream(sigMainNodeWorkload).sum() + (D * (a * HOP_DELAY)));
             int v2 = 0;
             for (int n = 1; n <= mainNode.neighbors.size(); n++) {
-//                System.out.println("Checking Neighbor: " + mainNode.neighbors.get(n - 1).id);
+                // System.out.println("Checking Neighbor: " + mainNode.neighbors.get(n - 1).id);
                 int[] neighborNodeWorkload = mainNode.neighbors.get(n - 1).currentWorkload;
                 MRFNode.MRFNodeState neighborState = mainNode.neighbors.get(n - 1).currentResourcesState;
                 double[] sigNeighborNodeWorkload = new double[neighborNodeWorkload.length];
@@ -289,7 +292,7 @@ public class MRF {
         try {
             BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
 
-            sb.append(sweepNo + ";" + String.format("%.2f", Vc) + "\n");
+            sb.append(sweepNo + "," + String.format("%.2f", Vc) + "\n");
 
             br.write(sb.toString());
             br.close();
@@ -402,5 +405,8 @@ public class MRF {
 
         nodes = createMRFGrid(gridSize);
         balanceLoadBetweenPois(residualWorkload, residualResources);
+
+        MRFPlotter plotter = new MRFPlotter();
+        plotter.doPlots();
     }
 }
