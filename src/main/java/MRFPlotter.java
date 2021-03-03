@@ -18,6 +18,7 @@ public class MRFPlotter extends Application {
     public void start(Stage stage) throws Exception {
         File mrfFile = new File(System.getProperty("user.dir") + "/evaluation_results/MRF").listFiles()[0];
         String mrfFilePath = mrfFile.getPath();
+        // String mrfFilePath = "/Users/avgr_m/netmode-cloudsim/evaluation_results/MRF/(Tue Mar 02 13:47:14 EET 2021)MRF.csv";
 
         // Prediction evaluation
         stage.setTitle("MRF Evaluation: " + mrfFilePath.substring(61));
@@ -28,6 +29,7 @@ public class MRFPlotter extends Application {
         yAxis.setLabel("Vc Score");
         xAxis.setLabel("Sweep");
         lineChart.setTitle("MRF: Vc per Sweep");
+        lineChart.setCreateSymbols(false);
 
         XYChart.Series vc = new XYChart.Series();
         XYChart.Series sweep = new XYChart.Series();

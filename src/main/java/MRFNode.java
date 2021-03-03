@@ -52,8 +52,9 @@ public class MRFNode {
 //            System.out.println("State ID: " + this.states[i].id + ", Power Consumption: " + this.states[i].powerCons);
 //        }
 
-        this.currentResourcesState = this.states[0]; // initialize poi state with all servers closed
-        this.currentWorkload = residualWorkload; // set current workload as the residual
+        // this.currentResourcesState = this.states[0]; // initialize poi state with all servers closed
+        // this.currentWorkload = residualWorkload; // set current workload as the residual
+        this.updateState(residualWorkload); // set current workload as the residual
         this.initialWorkload = residualWorkload;
     }
 
