@@ -101,6 +101,7 @@ public class NetmodeSim {
     private int[][] allocatedCores;
     private double[][] avgSinr;
     private double avgResidualEnergy;
+    private int[][] previousPredictedUsersPerCellPerApp;
 
     public static void main(String[] args) {
         new NetmodeSim();
@@ -116,6 +117,7 @@ public class NetmodeSim {
         csvm.listenTo("INT");
 
         transitionsLog = new HashMap<>();
+        transitionProbabilitiesMap = new HashMap<>();
         accumulatedCpuUtil = new HashMap<>();
         vmList = (ArrayList<Vm>[][]) new ArrayList[POI][APPS];
         taskList = (ArrayList<TaskSimple>[][]) new ArrayList[POI][APPS];
@@ -138,10 +140,10 @@ public class NetmodeSim {
         // Initialize transition probabilities to use for group movement prediction (mobility)
         if (!CREATE_NMMC_TRANSITION_MATRIX) {
             transitionProbabilitiesMap = csvm.readNMMCTransitionMatrixCSV();
-//            System.out.println("Transition Probabilities Map: ");
-//            transitionProbabilitiesMap.entrySet().forEach(entry -> {
-//                System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
-//            });
+            // System.out.println("Transition Probabilities Map: ");
+            // transitionProbabilitiesMap.entrySet().forEach(entry -> {
+            //     System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
+            // });
         }
 
         // Calculate variables required for VM optimization
@@ -190,7 +192,7 @@ public class NetmodeSim {
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr, avgResidualEnergy);
+                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -199,6 +201,7 @@ public class NetmodeSim {
 
                 // Predict group movement and random users arrival //
                 int[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
+                previousPredictedUsersPerCellPerApp = predictedUsersPerCellPerApp;
 
                 // Translate predicted users per cell to workload
                 double[][] nextIntervalPredictedTasks =
@@ -269,7 +272,7 @@ public class NetmodeSim {
         for (int i = 0; i < POI; i++)
             for (int j = 0; j < APPS; j++)
                 predictedUsersPerCellPerApp[i][j] = (int)Math.round(floatPredictedUsersPerCellPerApp[i][j]);
-//        System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
+       System.out.println("Total Predicted Users: " + Arrays.deepToString(predictedUsersPerCellPerApp));
 
         return predictedUsersPerCellPerApp;
     }
@@ -653,9 +656,10 @@ public class NetmodeSim {
         int[][][] usersPerCell = new int[gridSize][gridSize][APPS];
 
         for (Group group : groups) {
-//            System.out.println("Group Size: " + group.size);
-            usersPerCell[group.currPos.x][group.currPos.y][group.app] += group.size - 1 + random.nextInt(2);
-//            System.out.println("Users in this cel: " + usersPerCell[group.currPos.x][group.currPos.y]);
+            // System.out.println("Group Size: " + group.size);
+            // usersPerCell[group.currPos.x][group.currPos.y][group.app] += group.size - 1 + random.nextInt(2);
+            usersPerCell[group.currPos.x][group.currPos.y][group.app] += group.size;
+            // System.out.println("Users in this cel: " + usersPerCell[group.currPos.x][group.currPos.y]);
         }
 
         for (int i = 0; i < GRID_SIZE; i++) {

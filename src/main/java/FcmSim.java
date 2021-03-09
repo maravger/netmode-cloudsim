@@ -69,6 +69,7 @@ public class FcmSim {
     private int [][] taskCounter;
     private User[] assignedUsers;
     private double avgResidualEnergy;
+    private int[][] previousPredictedUsersPerCellPerApp;
 
     private final CloudSim simulation = new CloudSim();
 
@@ -131,7 +132,7 @@ public class FcmSim {
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr, avgResidualEnergy);
+                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
