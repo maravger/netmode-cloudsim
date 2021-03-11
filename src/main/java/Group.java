@@ -286,8 +286,8 @@ public class Group {
         // System.out.println("Next State: " + nextState);
         transitionsLog.get(this.historicState)[nextState]++;
         // System.out.println("Transition Log: ");
-        transitionsLog.entrySet().forEach(entry -> {
-            System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
-        });
+        // transitionsLog.entrySet().forEach(entry -> {
+        //     System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
+        // });
     }
 }

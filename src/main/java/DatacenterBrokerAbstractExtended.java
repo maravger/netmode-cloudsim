@@ -205,9 +205,9 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
         vmWaitingList.addAll(list);
 
         if (isStarted() && !list.isEmpty()) {
-            LOGGER.info(
-                    "{}: {}: List of {} VMs submitted to the broker during simulation execution. VMs creation request sent to Datacenter.",
-                    getSimulation().clockStr(), getName(), list.size());
+            // LOGGER.info(
+            //         "{}: {}: List of {} VMs submitted to the broker during simulation execution. VMs creation request sent to Datacenter.",
+            //         getSimulation().clockStr(), getName(), list.size());
             requestDatacenterToCreateWaitingVms(false);
         }
 
@@ -321,15 +321,16 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
             return this;
         }
 
-        LOGGER.info(
-                "{}: {}: List of {} Cloudlets submitted to the broker during simulation execution.",
-                getSimulation().clockStr(), getName(), list.size());
+        // LOGGER.info(
+        //         "{}: {}: List of {} Cloudlets submitted to the broker during simulation execution.",
+        //         getSimulation().clockStr(), getName(), list.size());
 
         if (allNonDelayedVmsCreated()) {
-            LOGGER.info("Cloudlets creation request sent to Datacenter.");
+            // LOGGER.info("Cloudlets creation request sent to Datacenter.");
             requestDatacentersToCreateWaitingCloudlets();
             notifyOnVmsCreatedListeners();
-        } else LOGGER.info("Waiting creation of {} VMs to send Cloudlets creation request to Datacenter.", vmWaitingList.size());
+        }
+        // else LOGGER.info("Waiting creation of {} VMs to send Cloudlets creation request to Datacenter.", vmWaitingList.size());
 
         return this;
     }
@@ -414,7 +415,7 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
             return;
         }
 
-        LOGGER.trace("{}: {}: Unknown event {} received.", getSimulation().clockStr(), this, evt.getTag());
+        // LOGGER.trace("{}: {}: Unknown event {} received.", getSimulation().clockStr(), this, evt.getTag());
     }
 
     private boolean processCloudletEvents(final SimEvent evt) {
@@ -558,7 +559,7 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
 
     private void logCloudletStatusChange(final Cloudlet cloudlet, final String status) {
         final String msg = cloudlet.getJobId() > 0 ? String.format("(job %d) ", cloudlet.getJobId()) : "";
-        LOGGER.info("{}: {}: Request to {} {} {}received.", getSimulation().clockStr(), this, status, cloudlet, msg);
+        // LOGGER.info("{}: {}: Request to {} {} {}received.", getSimulation().clockStr(), this, status, cloudlet, msg);
     }
 
     private void processCloudletFail(final SimEvent evt){
@@ -585,7 +586,7 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
      */
     private void processDatacenterListRequest(final SimEvent evt) {
 //        setDatacenterList((Set<Datacenter>) evt.getData());
-        LOGGER.info("{}: {}: List of {} datacenter(s) received.", getSimulation().clockStr(), getName(), datacenterList.size());
+//         LOGGER.info("{}: {}: List of {} datacenter(s) received.", getSimulation().clockStr(), getName(), datacenterList.size());
         requestDatacenterToCreateWaitingVms(false);
     }
 
@@ -642,16 +643,16 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
         /* If it gets here, it means that all datacenters were already queried
          * and not all VMs could be created. */
         if (vmExecList.isEmpty()) {
-            LOGGER.error(
-                    "{}: {}: None of the requested {} VMs could be created because suitable Hosts weren't found in any available Datacenter. Shutting broker down...",
-                    getSimulation().clockStr(), getName(), vmWaitingList.size());
+            // LOGGER.error(
+            //         "{}: {}: None of the requested {} VMs could be created because suitable Hosts weren't found in any available Datacenter. Shutting broker down...",
+            //         getSimulation().clockStr(), getName(), vmWaitingList.size());
             shutdownEntity();
             return;
         }
 
-        LOGGER.error(
-                "{}: {}: {} of the requested {} VMs couldn't be created because suitable Hosts weren't found in any available Datacenter.",
-                getSimulation().clockStr(), getName(), vmWaitingList.size(), getVmsNumber());
+        // LOGGER.error(
+        //         "{}: {}: {} of the requested {} VMs couldn't be created because suitable Hosts weren't found in any available Datacenter.",
+        //         getSimulation().clockStr(), getName(), vmWaitingList.size(), getVmsNumber());
 
         requestDatacentersToCreateWaitingCloudlets();
     }
@@ -731,7 +732,7 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
         final Cloudlet cloudlet = (Cloudlet) evt.getData();
         cloudletsFinishedList.add(cloudlet);
         ((VmSimple) cloudlet.getVm()).addExpectedFreePesNumber(cloudlet.getNumberOfPes());
-        LOGGER.info("{}: {}: {} finished and returned to broker.", getSimulation().clockStr(), getName(), cloudlet);
+        // LOGGER.info("{}: {}: {} finished and returned to broker.", getSimulation().clockStr(), getName(), cloudlet);
 
         if (cloudlet.getVm().getCloudletScheduler().isEmpty()) {
             requestIdleVmDestruction(cloudlet.getVm());
@@ -773,7 +774,7 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
 
         if (vm.isCreated()) {
             if((delay > DEF_VM_DESTRUCTION_DELAY && vm.isIdleEnough(delay)) || isFinished()) {
-                LOGGER.info("{}: {}: Requesting {} destruction.", getSimulation().clockStr(), getName(), vm);
+                // LOGGER.info("{}: {}: Requesting {} destruction.", getSimulation().clockStr(), getName(), vm);
                 sendNow(getDatacenter(vm), CloudSimTags.VM_DESTROY, vm);
             }
 
@@ -812,7 +813,7 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
             return cloudletsAffected;
         }
 
-        LOGGER.warn("Vm: " + vm.getId() + " does not belong to this broker! Broker: " + this.toString());
+        // LOGGER.warn("Vm: " + vm.getId() + " does not belong to this broker! Broker: " + this.toString());
         return new ArrayList<>();
     }
 
@@ -876,15 +877,15 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
 
     private void logVmCreationRequest(final Datacenter datacenter, final boolean isFallbackDatacenter, final Vm vm) {
         final String fallbackMsg = isFallbackDatacenter ? " (due to lack of a suitable Host in previous one)" : "";
-        if(vm.getSubmissionDelay() == 0)
-            LOGGER.info(
-                    "{}: {}: Trying to create {} in {}{}",
-                    getSimulation().clockStr(), getName(), vm, datacenter.getName(), fallbackMsg);
-        else
-            LOGGER.info(
-                    "{}: {}: Creation of {} in {}{} will be requested in {} seconds",
-                    getSimulation().clockStr(), getName(), vm, datacenter.getName(),
-                    fallbackMsg, vm.getSubmissionDelay());
+        // if(vm.getSubmissionDelay() == 0)
+        //     LOGGER.info(
+        //             "{}: {}: Trying to create {} in {}{}",
+        //             getSimulation().clockStr(), getName(), vm, datacenter.getName(), fallbackMsg);
+        // else
+        //     LOGGER.info(
+        //             "{}: {}: Creation of {} in {}{} will be requested in {} seconds",
+        //             getSimulation().clockStr(), getName(), vm, datacenter.getName(),
+        //             fallbackMsg, vm.getSubmissionDelay());
     }
 
     /**
@@ -940,9 +941,9 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
                 "%s: %s: Postponing execution of Cloudlet %d because {}.",
                 getSimulation().clockStr(), getName(), cloudlet.getId());
 
-        if(cloudlet.getVm().getSubmissionDelay() > 0)
-            LOGGER.info(msg, String.format("bind Vm %d was requested to be created with some delay", cloudlet.getVm().getId()));
-        else LOGGER.warn(msg, vmMsg);
+        // if(cloudlet.getVm().getSubmissionDelay() > 0)
+        //     LOGGER.info(msg, String.format("bind Vm %d was requested to be created with some delay", cloudlet.getVm().getId()));
+        // else LOGGER.warn(msg, vmMsg);
     }
 
     private void logCloudletCreationRequest(final Cloudlet cloudlet) {
@@ -951,10 +952,10 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
                         String.format(" with a requested delay of %.0f seconds", cloudlet.getSubmissionDelay()) :
                         "";
 
-        LOGGER.info(
-                "{}: {}: Sending Cloudlet {} to {} in {}{}.",
-                getSimulation().clockStr(), getName(), cloudlet.getId(),
-                lastSelectedVm, lastSelectedVm.getHost(), delayMsg);
+        // LOGGER.info(
+        //         "{}: {}: Sending Cloudlet {} to {} in {}{}.",
+        //         getSimulation().clockStr(), getName(), cloudlet.getId(),
+        //         lastSelectedVm, lastSelectedVm.getHost(), delayMsg);
     }
 
     private boolean allWaitingCloudletsSubmittedToVm() {
@@ -964,9 +965,9 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
 
         //avoid duplicated notifications
         if (wereThereWaitingCloudlets) {
-            LOGGER.info(
-                    "{}: {}: All waiting Cloudlets submitted to some VM.",
-                    getSimulation().clockStr(), getName());
+            // LOGGER.info(
+            //         "{}: {}: All waiting Cloudlets submitted to some VM.",
+            //         getSimulation().clockStr(), getName());
             wereThereWaitingCloudlets = false;
         }
 
@@ -976,13 +977,13 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
     @Override
     public void shutdownEntity() {
         super.shutdownEntity();
-        LOGGER.info("{}: {} is shutting down...", getSimulation().clockStr(), getName());
+        // LOGGER.info("{}: {} is shutting down...", getSimulation().clockStr(), getName());
         requestVmDestructionAfterAllCloudletsFinished();
     }
 
     @Override
     public void startEntity() {
-        LOGGER.info("{} is starting...", getName());
+        // LOGGER.info("{} is starting...", getName());
         schedule(getSimulation().getCloudInfoService(), 0, CloudSimTags.DATACENTER_LIST_REQUEST);
     }
 

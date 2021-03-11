@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 3600;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 120;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -76,7 +76,8 @@ public class NetmodeSim {
     private Double[][] simData;
     private int lastAccessed;
     private int maxVmSize;
-    private final CloudSim simulation = new CloudSim();
+    // private final CloudSim simulation = new CloudSim();
+    private final CloudSim simulation = new CloudSim(0.01);
     private DatacenterBrokerSimpleExtended[] edgeBroker;
     private ArrayList<Vm>[][] vmList;
     private ArrayList<TaskSimple>[][] taskList;
@@ -590,7 +591,7 @@ public class NetmodeSim {
                         pD = new PoissonDistribution(requestRatePerCell[i][j][app] / SAMPLING_INTERVAL);
                         tasksToCreate = pD.sample();
                         taskList[poi][app] = new ArrayList<>();
-                        System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n",
+                        System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.",
                                 tasksToCreate, poi, app, evt.getTime());
                         taskList[poi][app] = (ArrayList<TaskSimple>) createTasks(tasksToCreate, poi, app, 0);
                         edgeBroker[poi].submitCloudletList(taskList[poi][app]);
@@ -603,7 +604,7 @@ public class NetmodeSim {
 //                            }
 //                        }
                     } else {
-                        System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.%n", 0,
+                        System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.", 0,
                                 poi, app, evt.getTime());
                     }
                 }
