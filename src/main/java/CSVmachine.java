@@ -3,6 +3,7 @@ import sun.misc.Signal;
 import sun.misc.SignalHandler;
 
 import java.io.*;
+import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -22,12 +23,14 @@ public final class CSVmachine implements SignalHandler{
     private int apps;
     private int samplingInterval;
     private String timeStamp;
+    private HashMap<String, double[]> predictionStats;
 
     public CSVmachine (int pois, int apps, int samplingInterval) {
         this.pois = pois;
         this.apps = apps;
         this.samplingInterval = samplingInterval;
         this.timeStamp = String.valueOf(new Date());
+        this.predictionStats = new HashMap<>();
     }
 
     public void listenTo(String signalName) {
@@ -51,7 +54,7 @@ public final class CSVmachine implements SignalHandler{
                                                    double[][] accumulatedResponseTime, HashMap<Long, Double> accumulatedCpuUtil,
                                                    int[] poiAllocatedCores, int[] poiPowerConsumption,
                                                    int[][] allocatedUsers, int[][] allocatedCores, double[][] avgSinr,
-                                                   double avgResidualEnergy, int[][] predictedUsers) {
+                                                   double avgResidualEnergy, int[][] predictedUsers, int[][] intervalViolations) {
         // Print to console
         System.out.printf("%n%n------------------------- INTERVAL INFO --------------------------%n%n");
         System.out.printf(" POI | App | Admitted Tasks | Finished Tasks | Average Throughput | Average Response Time \n");
@@ -86,8 +89,8 @@ public final class CSVmachine implements SignalHandler{
         this.updateIntervalPoiPerformanceCSVs(intervalNo, poiPowerConsumption, poiAllocatedCores);
 
         System.out.println("...Updating Total Prediction CSVs");
-        this.updateTotalPredictionCSVs(intervalNo, intervalPredictedTasks, intervalAdmittedTasks,
-                accumulatedResponseTime, intervalFinishedTasks);
+        this.updateTotalPredictionCSVs(intervalPredictedTasks, intervalAdmittedTasks, accumulatedResponseTime,
+                intervalFinishedTasks, intervalViolations);
 
         System.out.println();
         System.out.println("\n------------------------------------------------------------------\n");
@@ -143,8 +146,6 @@ public final class CSVmachine implements SignalHandler{
             e.printStackTrace();
         }
     }
-
-
 
     private Pair<String, double[]> getRecordFromLine(String line) {
         double[] value = new double[pois];
@@ -231,13 +232,17 @@ public final class CSVmachine implements SignalHandler{
         }
     }
 
-    private void updateTotalPredictionCSVs(int intervalNo, double[][] predictedWorkload, int[][] admittedTasks,
-                                           double[][] accumulatedResponseTime, int[][] intervalFinishedTasks) {
+    private void updateTotalPredictionCSVs(double[][] predictedWorkload, int[][] admittedTasks,
+                                           double[][] accumulatedResponseTime, int[][] intervalFinishedTasks,
+                                           int[][] intervalViolations) {
+
         // Prediction Evaluation
         int toExclude = 0;
         double[][] acc = new double[this.pois][this.apps];
+        boolean[][] exclude = new boolean[this.pois][this.apps];
         for (int poi = 0; poi < this.pois; poi++) {
             for (int app = 0; app < this.apps; app++) {
+                if (predictedWorkload[poi][app] > admittedTasks[poi][app]) exclude[poi][app] = true; // experimental
                 double dif = Math.abs(predictedWorkload[poi][app] - admittedTasks[poi][app]);
                 if (admittedTasks[poi][app] != 0) acc[poi][app] = dif / admittedTasks[poi][app];
                 else toExclude++;
@@ -266,14 +271,14 @@ public final class CSVmachine implements SignalHandler{
         }
         System.out.println("Per Poi - Per App ART = " + Arrays.deepToString(art));
 
-        // Total Violations
-        int violations = 0;
-        for (int poi = 0; poi < this.pois; poi++) {
-            for (int app = 0; app < this.apps; app++) {
-                if (art[poi][app] > 4) violations++;
-            }
-        }
-        System.out.println("Interval violations = " + violations);
+        // double[][] violationsPercentage = new double[this.pois][this.apps];
+        // Total Violations Percentage
+        // for (int poi = 0; poi < this.pois; poi++) {
+        //     for (int app = 0; app < this.apps; app++) {
+        //         violationsPercentage[poi][app] = intervalViolations[poi][app] / intervalFinishedTasks[poi][app];
+        //     }
+        // }
+        // System.out.println("Interval violations = " + Arrays.deepToString(violationsPercentage));
 
         // Mean ART
         toExclude = 0;
@@ -292,16 +297,26 @@ public final class CSVmachine implements SignalHandler{
         StringBuilder sb = new StringBuilder();
         if(!csvFile.isFile()) {
             // sb.append("Interval, Prediction_Error, Total_Violations, Average_Response_Time\n");
-            sb.append("Prediction_Error, Average_Response_Time\n");
+            sb.append("Prediction_Error, Average_Response_Time, NoOfViolations, NoOf_Finished_Tasks, AccResponseTime\n");
         }
         try {
             BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
 
             for (int poi = 0; poi < this.pois; poi++) {
                 for (int app = 0; app < this.apps; app++) {
-                    if ((acc[poi][app] != 0) && !Double.isNaN(art[poi][app]))
+                    if (exclude[poi][app]) continue;
+                    if ((acc[poi][app] != 0) && !Double.isNaN(art[poi][app]) && art[poi][app] < 20) {
                         // sb.append(intervalNo + "," + acc[poi][app] + "," + violations + "," + art[poi][app] + "\n");
-                        sb.append(acc[poi][app] + "," + art[poi][app] + "\n");
+                        sb.append(acc[poi][app] + "," + art[poi][app] + "," + intervalViolations[poi][app] + "," +
+                                intervalFinishedTasks[poi][app] + "," + accumulatedResponseTime[poi][app] + "\n");
+                        DecimalFormat dc = new DecimalFormat("#.#");
+                        dc.setRoundingMode(RoundingMode.FLOOR);
+                        String key = dc.format(acc[poi][app]);
+                        if (!predictionStats.containsKey(key)) predictionStats.put(key, new double[3]);
+                        predictionStats.get(key)[0] += accumulatedResponseTime[poi][app]; // accumulate response time
+                        predictionStats.get(key)[1] += intervalFinishedTasks[poi][app]; // number of incidents
+                        predictionStats.get(key)[2] += intervalViolations[poi][app]; //number of violations
+                    }
                 }
             }
 
@@ -371,6 +386,31 @@ public final class CSVmachine implements SignalHandler{
         }
     }
 
+    private void sumUpTotalPredictions(){
+        predictionStats.entrySet().forEach(entry -> {
+            System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
+        });
+
+        Map<String, double[]> sortedPredErrors = new TreeMap<>(predictionStats);
+
+        String fileName = "TOTAL(" + this.timeStamp + ").csv";
+        File csvFile = new File(System.getProperty("user.dir") + "/evaluation_results/Prediction/" + fileName);
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n");
+        try {
+            BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
+            sortedPredErrors.entrySet().forEach(entry -> {
+                sb.append(entry.getKey() + "," + new DecimalFormat("#.##").format(entry.getValue()[0] /
+                        entry.getValue()[1]) + "," + new DecimalFormat("#.##").format(entry.getValue()[2] /
+                        entry.getValue()[1]) + "\n");
+            });
+            br.write(sb.toString());
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     public void archiveSimulationCSVs() {
         File[] folders = new File(System.getProperty("user.dir") + "/evaluation_results").listFiles();
         for (File folder : folders) {
@@ -406,9 +446,12 @@ public final class CSVmachine implements SignalHandler{
     }
 
     public void plotCSVs() {
+        sumUpTotalPredictions();
         Plotter plotter = new Plotter();
 //        plotter.doPlots();
-    }public Double[][] readSimCSVData() {
+    }
+
+    public Double[][] readSimCSVData() {
         ArrayList<ArrayList<Double>> simTempListData = new ArrayList<>();
         BufferedReader csvReader = null;
 

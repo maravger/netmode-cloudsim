@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 120;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 36000;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -58,19 +58,21 @@ public class NetmodeSim {
     // VM related constants
     private static final int[][] VM_PES = {{1, 2, 4}, {1, 2, 4}}; // [app][flavor]
     private static final int[][] VM_PE_MIPS = {{2000, 2000, 2000}, {2000, 2000, 2000}};
-//    private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}}; // old ops
+    // private static final double[][] VM_GUARANTEED_AVG_RR = {{37.35, 82.24, 172.68}, {37.35, 82.24, 172.68}}; // old ops
     private static final double[][] VM_GUARANTEED_AVG_RR = {{11, 27, 59}, {37.35, 82.24, 172.68}}; // new ops
     private static final int VM_RAM = 4096;
     private static final int VM_BW = 200000;
-    private static final double UNDERUTILISED_VM_CUTOFF = 0.5;
+    // private static final double UNDERUTILISED_VM_CUTOFF = 0.5;
+    private static final double UNDERUTILISED_VM_CUTOFF = 0.0;
 
     // Task related constants
     private static final int TASK_PES = 1;
-//    private static final int TASK_LENGTH = {1000, 1000}; // old ops
+    // private static final int TASK_LENGTH = {1000, 1000}; // old ops
     private static final int[] TASK_LENGTH = {3000, 1000};
-//    private static final double[] APP_REQUEST_RATE_PER_USER = {3, 7}; // needed in order to make a sound translation // old ops
+    // private static final double[] APP_REQUEST_RATE_PER_USER = {3, 7}; // needed in order to make a sound translation // old ops
     private static final double[] APP_REQUEST_RATE_PER_USER = {1, 7}; // needed in order to make a sound translation
     private static final int[][] CELL_OFFLOADING_DISTANCE_INDEX = {{1, 1, 4}, {3, 1, 2}, {4, 4, 2}};
+    private static final double VIOLATION_THRESHOLD = 4;
 
     // Various "global" variables
     private Double[][] simData;
@@ -153,15 +155,17 @@ public class NetmodeSim {
         powerConsumption = calculateHostPowerConsumption(feasibleFormations, EDGE_HOST_PES);
 
         // Initial Predicted Workload TODO: change, too manual
-        double [][] predictedWorkload = {{100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}, {100, 100},
+        double[][] predictedWorkload = {{100, 100}, {50, 50}, {70, 70}, {100, 100}, {50, 50}, {70, 70}, {100, 100},
                 {50, 50}, {70, 70}};
         intervalPredictedTasks = predictedWorkload;
+        previousPredictedUsersPerCellPerApp = new int[][] {{10, 10}, {5, 5}, {7, 7}, {10, 10}, {5, 5}, {7, 7}, {10, 10},
+                {5, 5}, {7, 7}};
 
         ArrayList<Integer>[] vmPlacement =
                 optimizeVmPlacement(EDGE_HOSTS, predictedWorkload, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
 
         // Create number of initial VMs for each app
-        spawnVms(feasibleFormations, vmPlacement);
+        vmPool = spawnVms(feasibleFormations, vmPlacement);
 
         // Run simulation
         runSimulationAndPrintResults();
@@ -179,48 +183,49 @@ public class NetmodeSim {
             // If a full interval has been completed or first interval, predict group movement, optimize vm placement,
             // actually move group, generate request rate per cell
             if (((int) evt.getTime() % SAMPLING_INTERVAL == 0) || firstEvent) {
-
                 if (!firstEvent) {
                     // Collect Stats and present them
                     IntervalStats stats = collectTaskStats();
                     int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
                     int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
+                    int[][] intervalViolations = stats.getIntervalViolations();
                     double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
 
                     // TODO: remove when debugging is over
-                    System.out.println("Request Rate to generate in Previous Interval: " + Arrays.deepToString(requestRatePerCell));
+                    System.out.println("\n Request Rate to generate in Previous Interval: " + Arrays.deepToString(requestRatePerCell));
 
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp);
+                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
                     lastIntervalFinishTime = (int) evt.getTime();
+
+
+                    // Predict group movement and random users arrival //
+                    int[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
+                    previousPredictedUsersPerCellPerApp = predictedUsersPerCellPerApp;
+
+                    // Translate predicted users per cell to workload
+                    double[][] nextIntervalPredictedTasks =
+                            predictNextIntervalWorkload(predictedUsersPerCellPerApp, APP_REQUEST_RATE_PER_USER);
+
+                    // Optimize VM placement based on energy consumption and guaranteed workload completion,
+                    // actually allocate VMs and perform MRF
+                    ArrayList<Integer>[] vmPlacement =
+                            optimizeVmPlacement(EDGE_HOSTS, nextIntervalPredictedTasks, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
+                    double[][] residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, nextIntervalPredictedTasks);
+                    int[] residualResources = calculateResidualResources(vmPlacement, EDGE_HOSTS);
+
+                    // MRF.promptEnterKey();
+
+                    // MRF step (TODO)
+
+                    // Spawn VMs realizing the above decisions
+                    vmPool = spawnVms(feasibleFormations, vmPlacement);
                 }
-
-                // Predict group movement and random users arrival //
-                int[][] predictedUsersPerCellPerApp = predictNextIntervalUsers(groups, transitionProbabilitiesMap);
-                previousPredictedUsersPerCellPerApp = predictedUsersPerCellPerApp;
-
-                // Translate predicted users per cell to workload
-                double[][] nextIntervalPredictedTasks =
-                        predictNextIntervalWorkload(predictedUsersPerCellPerApp, APP_REQUEST_RATE_PER_USER);
-
-                // Optimize VM placement based on energy consumption and guaranteed workload completion,
-                // actually allocate VMs and perform MRF
-                ArrayList<Integer>[] vmPlacement =
-                        optimizeVmPlacement(EDGE_HOSTS, nextIntervalPredictedTasks, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
-                double[][] residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, nextIntervalPredictedTasks);
-                int[] residualResources = calculateResidualResources(vmPlacement, EDGE_HOSTS);
-
-//                MRF.promptEnterKey();
-
-                // MRF step (TODO)
-
-                // Spawn VMs realizing the above decisions
-                vmPool = spawnVms(feasibleFormations, vmPlacement);
 
                 // Create Load Balancers and assign them one per POI
                 createLoadBalancers(vmPool);
@@ -230,8 +235,7 @@ public class NetmodeSim {
                     group.move(transitionsLog, POI);
 
                 // Change request rate based on the groups movement
-                requestRatePerCell = createRequestRate(createUsers(GRID_SIZE, groups),
-                        APP_REQUEST_RATE_PER_USER, nextIntervalPredictedTasks);
+                requestRatePerCell = createRequestRate(createUsers(GRID_SIZE, groups), APP_REQUEST_RATE_PER_USER, intervalPredictedTasks);
 
                 // First interval arrangements are now over
                 if (firstEvent) firstEvent = false;
@@ -521,48 +525,50 @@ public class NetmodeSim {
     private IntervalStats collectTaskStats() {
         int[][] intervalFinishedTasks = new int[POI][APPS];
         int[][] intervalAdmittedTasks = new int[POI][APPS];
+        int[][] intervalViolations = new int[POI][APPS];
         double[][] accumulatedResponseTime  = new double[POI][APPS];
 
         for (int poi = 0; poi < POI; poi++) {
-//                System.out.println(edgeBroker[poi].getCloudletFinishedList().size());
+            // System.out.println(edgeBroker[poi].getCloudletFinishedList().size());
             for (Cloudlet c : edgeBroker[poi].getCloudletFinishedList()) {
                 // Ensure that Task has been completed within the Interval
                 if (c.getFinishTime() > lastIntervalFinishTime) {
-//                        System.out.println("Task ID: " + c.getId());
-//                        System.out.println("Execution Time: " + c.getActualCpuTime());
-//                        System.out.println("Finish Time: " + c.getFinishTime());
-//                        System.out.println("Start Time: " + c.getExecStartTime());
-//                        System.out.println("-------------------------------------");
+                    // System.out.println("Task ID: " + c.getId());
+                    // System.out.println("Execution Time: " + c.getActualCpuTime());
+                    // System.out.println("Finish Time: " + c.getFinishTime());
+                    // System.out.println("Start Time: " + c.getExecStartTime());
+                    // System.out.println("-------------------------------------");
                     JsonObject description = new JsonParser().parse(c.getVm().getDescription()).getAsJsonObject();
                     int app = description.get("App").getAsInt();
                     intervalFinishedTasks[poi][app]++;
                     accumulatedResponseTime[poi][app] += c.getActualCpuTime();
-//                    System.out.println("Current accumulated Response Time: " + accumulatedResponseTime[poi][app]);
-//                    System.out.println(" + " + (c.getFinishTime() - c.getExecStartTime()));
-//                    System.out.println(" ------------------------------------------");
+                    if (c.getActualCpuTime() > VIOLATION_THRESHOLD) intervalViolations[poi][app]++;
+                    // System.out.println("Current accumulated Response Time: " + accumulatedResponseTime[poi][app]);
+                    // System.out.println(" + " + (c.getFinishTime() - c.getExecStartTime()));
+                    // System.out.println(" ------------------------------------------");
                 }
             }
         }
 
         for (int poi = 0; poi < POI; poi++) {
-//               System.out.println(edgeBroker[poi].getCloudletFinishedList().size());
-//            System.out.println(edgeBroker[poi].getCloudletSubmittedList().size());
+            // System.out.println(edgeBroker[poi].getCloudletFinishedList().size());
+            // System.out.println(edgeBroker[poi].getCloudletSubmittedList().size());
             for (Cloudlet c : edgeBroker[poi].getCloudletSubmittedList()) {
                 // Ensure that Task has been completed within the Interval
-//                System.out.println(c.getLastDatacenterArrivalTime());
-//                System.out.println(lastIntervalFinishTime);
+                // System.out.println(c.getLastDatacenterArrivalTime());
+                // System.out.println(lastIntervalFinishTime);
                 if (c.getLastDatacenterArrivalTime() > lastIntervalFinishTime) {
-//                    System.out.println("VM description: " + c.getVm().getDescription());
+                    // System.out.println("VM description: " + c.getVm().getDescription());
                     JsonObject description = new JsonParser().parse(c.getVm().getDescription()).getAsJsonObject();
                     int app = description.get("App").getAsInt();
-//                    System.out.println(c.getLastDatacenterArrivalTime());
+                    // System.out.println(c.getLastDatacenterArrivalTime());
                     intervalAdmittedTasks[poi][app]++;
-//                    System.out.println(intervalAdmittedTasks[poi][app]);
+                    // System.out.println(intervalAdmittedTasks[poi][app]);
                 }
             }
         }
 
-        return new IntervalStats(intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime);
+        return new IntervalStats(intervalFinishedTasks, intervalAdmittedTasks, intervalViolations, accumulatedResponseTime);
     }
 
     private void correctlySetVmDescriptions(ArrayList<Vm> vmList) {
@@ -613,8 +619,8 @@ public class NetmodeSim {
     }
 
     // TODO: remove next interval predicted workload when debugging is finished
-    private double[][][] createRequestRate(int[][][] assignedUsers, double[] appRequestRatePerUser,
-                                           double[][] predictNextIntervalWorkload) {
+    private double[][][] createRequestRate(int[][][] assignedUsers, double[] appRequestRatePerUser, double[][]
+            predictNextIntervalWorkload) {
         double[][][] requestRatePerCellPerApp = new double[GRID_SIZE][GRID_SIZE][APPS];
         int dataRow, dataCol;
 
@@ -735,6 +741,7 @@ public class NetmodeSim {
             vm.setId(poi * 1000 + host * 100 + app * 10 + vmId);
             vm.setRam(vm_ram).setBw(vm_bw).setSize(1000);
             vm.setCloudletScheduler(cloudletScheduler); // TODO: not sure if suppressing is better or real issue exists
+            // vm.getCloudletScheduler().getCloudletExecList().size();
             list.add(vm);
         }
         return list;
@@ -800,6 +807,7 @@ public class NetmodeSim {
             for (int hostID = 0; hostID < EDGE_HOSTS; hostID++) {
                 Host host = edgeBroker[poi].getDatacenterList().get(0).getHost(hostID);
                 for (Vm vm: host.getVmCreatedList()){
+                    edgeBroker[poi].getDatacenterList().get(0).getVmAllocationPolicy().deallocateHostForVm(vm);
                     vm.setFailed(true);
                     vm.getHost().getVmScheduler().deallocatePesFromVm(vm);
                     host.destroyVm(vm);
@@ -814,27 +822,28 @@ public class NetmodeSim {
         // Destroy existing VMs
         destroyVms();
 
-//        System.out.println("Feasible Formations: ");
-//        int formation = 0;
-//        for (int[][] ff : feasibleFormations) {
-//            System.out.println(formation + " -> " + Arrays.deepToString(ff));
-//            formation++;
-//        }
+        // System.out.println("Feasible Formations: ");
+        // int formation = 0;
+        // for (int[][] ff : feasibleFormations) {
+        //     System.out.println(formation + " -> " + Arrays.deepToString(ff));
+        //     formation++;
+        // }
 
         // Spawn new VMs as instructed
+        // createBrokersAndDatacenters(POI);
         System.out.println("\n--------- SPAWNING VMS ---------\n");
         for (int poi = 0; poi < POI; poi++) {
             vmPool[poi] = new ArrayList<>();
             ArrayList<Vm> tempVmList = new ArrayList();
-//            System.out.println("POI: " + poi);
+            // System.out.println("POI: " + poi);
             for (int host = 0; host < vmPlacement[poi].size(); host++) {
-//                System.out.println(" Host: " + host);
+                // System.out.println(" Host: " + host);
                 for (int app = 0; app < APPS; app++) {
-//                    System.out.println("  App: " + app);
+                    // System.out.println("  App: " + app);
                     for (int vm = 0; vm < feasibleFormations.get(vmPlacement[poi].get(host))[app].length; vm++) {
                         int vmCores = feasibleFormations.get(vmPlacement[poi].get(host))[app][vm];
                         int vmFlavor = ArrayUtils.indexOf(VM_PES[app], vmCores); // TODO write it better!!!
-//                        System.out.println("Host Type Vm Types for this app: " + Arrays.toString(feasibleFormations.get(vmPlacement[poi].get(host))[app]));
+                        // System.out.println("Host Type Vm Types for this app: " + Arrays.toString(feasibleFormations.get(vmPlacement[poi].get(host))[app]));
                         vmList[poi][app] = createVms(1, poi, app, vmFlavor, host, vm);
                         tempVmList.addAll(vmList[poi][app]);
                         vmPool[poi].addAll(vmList[poi][app]);
@@ -847,11 +856,11 @@ public class NetmodeSim {
         }
 
         // Debug Vm pool
-//        for (int poi = 0; poi < POI; poi++) {
-//            System.out.println("--- VM POOL at POI: " + poi + " ---");
-//            for (Vm vm : vmPool[poi])
-//                System.out.println("VM ID: " + vm.getId() + ", VM APP: " + vm.getDescription());
-//        }
+        // for (int poi = 0; poi < POI; poi++) {
+        //     System.out.println("--- VM POOL at POI: " + poi + " ---");
+        //     for (Vm vm : vmPool[poi])
+        //         System.out.println("VM ID: " + vm.getId() + ", VM APP: " + vm.getDescription());
+        // }
 
         return vmPool;
     }

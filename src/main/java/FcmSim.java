@@ -89,6 +89,7 @@ public class FcmSim {
         allocatedCores = new int[POI][APPS];
         intervalPredictedTasks = new double[POI][APPS];
         avgSinr = new double[POI][APPS];
+        previousPredictedUsersPerCellPerApp = new int[POI][APPS];
 
         // Archive previous Simulation results
         csvm.archiveSimulationCSVs();
@@ -124,6 +125,7 @@ public class FcmSim {
                     IntervalStats stats = collectTaskStats();
                     int[][] intervalFinishedTasks = stats.getIntervalFinishedTasks();
                     int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
+                    int[][] intervalViolations = new int[POI][APPS];
                     double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
 
                     // TODO: remove when debugging is over
@@ -132,7 +134,7 @@ public class FcmSim {
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp);
+                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -166,6 +168,7 @@ public class FcmSim {
     private IntervalStats collectTaskStats() {
         int[][] intervalFinishedTasks = new int[POI][APPS];
         int[][] intervalAdmittedTasks = new int[POI][APPS];
+        int[][] intervalViolations = new int[POI][APPS];
         double[][] accumulatedResponseTime  = new double[POI][APPS];
 
         for (int poi = 0; poi < POI; poi++) {
@@ -190,7 +193,7 @@ public class FcmSim {
             }
         }
 
-        return new IntervalStats(intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime);
+        return new IntervalStats(intervalFinishedTasks, intervalAdmittedTasks, intervalViolations, accumulatedResponseTime);
     }
 
     private void createBrokersAndDatacenters(int pois) {

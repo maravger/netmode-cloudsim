@@ -746,7 +746,7 @@ public abstract class DatacenterBrokerAbstractExtended extends CloudSimEntity im
      * Request the destruction of VMs after all running cloudlets have finished and returned to the broker.
      * If there is no waiting Cloudlet, request all VMs to be destroyed.
      */
-    private void requestVmDestructionAfterAllCloudletsFinished() {
+    public void requestVmDestructionAfterAllCloudletsFinished() {
         for (int i = vmExecList.size() - 1; i >= 0; i--) {
             requestIdleVmDestruction(vmExecList.get(i));
         }
