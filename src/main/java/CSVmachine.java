@@ -54,7 +54,8 @@ public final class CSVmachine implements SignalHandler{
                                                    double[][] accumulatedResponseTime, HashMap<Long, Double> accumulatedCpuUtil,
                                                    int[] poiAllocatedCores, int[] poiPowerConsumption,
                                                    int[][] allocatedUsers, int[][] allocatedCores, double[][] avgSinr,
-                                                   double avgResidualEnergy, int[][] predictedUsers, int[][] intervalViolations) {
+                                                   double avgResidualEnergy, int[][] predictedUsers, int[][] intervalViolations,
+                                                   int[] optimalPowerConsumption) {
         // Print to console
         System.out.printf("%n%n------------------------- INTERVAL INFO --------------------------%n%n");
         System.out.printf(" POI | App | Admitted Tasks | Finished Tasks | Average Throughput | Average Response Time \n");
@@ -86,7 +87,7 @@ public final class CSVmachine implements SignalHandler{
                 accumulatedResponseTime, allocatedUsers, allocatedCores, avgSinr, avgResidualEnergy);
 
         System.out.println("...Updating Interval Host Performance CSVs");
-        this.updateIntervalPoiPerformanceCSVs(intervalNo, poiPowerConsumption, poiAllocatedCores);
+        this.updateIntervalPoiPerformanceCSVs(intervalNo, poiPowerConsumption, poiAllocatedCores, optimalPowerConsumption);
 
         System.out.println("...Updating Total Prediction CSVs");
         this.updateTotalPredictionCSVs(intervalPredictedTasks, intervalAdmittedTasks, accumulatedResponseTime,
@@ -362,7 +363,8 @@ public final class CSVmachine implements SignalHandler{
         }
     }
 
-    private void updateIntervalPoiPerformanceCSVs(int intervalNo, int[] powerConsumption, int[] allocatedCores) {
+    private void updateIntervalPoiPerformanceCSVs(int intervalNo, int[] powerConsumption, int[] allocatedCores,
+                                                  int[] optimalPowerConsumption) {
         // Host Performance evaluation
         for (int poi = 0; poi < this.pois; poi++) {
             // Initiate files if not present
@@ -371,12 +373,12 @@ public final class CSVmachine implements SignalHandler{
             StringBuilder sb = new StringBuilder();
             if(!csvFile.isFile()) {
 //                    System.out.println("File does not exist!");
-                sb.append("Interval, PwrConsumption, AllocatedCores\n");
+                sb.append("Interval, PwrConsumption, OptimalPwrConsumption, AllocatedCores\n");
             }
             try {
                 BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
 
-                sb.append(intervalNo + "," + powerConsumption[poi] + "," + allocatedCores[poi] + "\n");
+                sb.append(intervalNo + "," + powerConsumption[poi] + "," + optimalPowerConsumption[poi] + "," + allocatedCores[poi] + "\n");
 
                 br.write(sb.toString());
                 br.close();

@@ -127,6 +127,7 @@ public class FcmSim {
                     int[][] intervalAdmittedTasks = stats.getIntervalAdmittedTasks();
                     int[][] intervalViolations = new int[POI][APPS];
                     double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
+                    int[] optimalPowerConsumption = new int[POI];
 
                     // TODO: remove when debugging is over
                     System.out.println("Request Rate to generate in Previous Interval: " + Arrays.deepToString(requestRatePerCell));
@@ -134,7 +135,8 @@ public class FcmSim {
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations);
+                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations,
+                            optimalPowerConsumption);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();

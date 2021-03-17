@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 36000;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 360;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -191,13 +191,22 @@ public class NetmodeSim {
                     int[][] intervalViolations = stats.getIntervalViolations();
                     double[][] accumulatedResponseTime = stats.getAccumulatedResponseTime();
 
+                    double[][] doubleIntervalAdmittedTasks = new double[POI][APPS];
+                    for(int i = 0; i < POI; i++) {
+                        for (int j = 0; j < APPS; j++) {
+                            doubleIntervalAdmittedTasks[i][j] = intervalAdmittedTasks[i][j];
+                        }
+                    }
+                    int[] optimalPowerConsumption = calculateOptimalPowerConsumption(EDGE_HOSTS, doubleIntervalAdmittedTasks,
+                            EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
+
                     // TODO: remove when debugging is over
                     System.out.println("\n Request Rate to generate in Previous Interval: " + Arrays.deepToString(requestRatePerCell));
 
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations);
+                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations, optimalPowerConsumption);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -409,6 +418,56 @@ public class NetmodeSim {
         return vmPlacement;
     }
 
+    private int[] calculateOptimalPowerConsumption(int hosts, double[][] realWorkload, int edgeHostPes,
+                                                     double cutOffPoint) {
+        ArrayList<Integer>[] tempVmPlacement = new ArrayList[POI];
+        ArrayList<Integer>[] vmPlacement = new ArrayList[POI];
+
+        // Solve lp optimization
+        for (int poi = 0; poi < POI; poi++) {
+//            System.out.println(Arrays.deepToString(guaranteedWorkload));
+//            System.out.println(Arrays.toString(energyConsumption));
+            try {
+                System.out.print("POI: " + poi + ", ");
+                tempVmPlacement[poi] =
+                        Optimizer.optimizeVmPlacement(guaranteedWorkload, powerConsumption, hosts, realWorkload[poi]);
+            } catch (LpSolveException e) {
+                e.printStackTrace();
+            }
+        }
+//        System.out.println("\nVM Placement (before rejecting underutilised servers): \n"
+//                + Arrays.deepToString(tempVmPlacement));
+
+        // Cut out "underutilised" servers. Underutilisation criteria = less than 50% of the cores allocated
+        int poi = 0;
+        for (ArrayList<Integer> tempSite : tempVmPlacement) {
+            ArrayList<Integer> site = new ArrayList<>(tempSite);
+            for (int server : tempSite) {
+                int serverCoreSum = 0;
+                for (int app = 0; app < APPS; app++)
+                    serverCoreSum += IntStream.of(feasibleFormations.get(server)[app]).sum();
+//                System.out.println(serverCoreSum);
+                // throws java.util.ConcurrentModificationException if modifying the iterated array. Thus use tempSite
+                if ((serverCoreSum / (double) edgeHostPes) <= cutOffPoint) site.remove(server);
+            }
+            vmPlacement[poi] = site;
+            poi++;
+        }
+
+        // Calculate Hosts' power consumption and total allocated cores
+        int[] optimalPowerConsumption = new int[POI];
+        for (poi = 0; poi < POI; poi++) {
+            for (int hostType : vmPlacement[poi]) {
+                optimalPowerConsumption[poi] += powerConsumption[hostType];
+            }
+        }
+
+        System.out.println("--- optimal VM Placement: \n" + Arrays.deepToString(vmPlacement));
+        System.out.println("--- optimal POIs' Power Consumption (in W): \n" + Arrays.toString(optimalPowerConsumption));
+
+        return optimalPowerConsumption;
+    }
+
     private double[][] calculateHostGuaranteedWorkload(ArrayList<int[][]> feasibleFormations) {
         int totalFormations = feasibleFormations.size();
         double[][] guaranteedWorkload = new double[totalFormations][APPS];
@@ -597,8 +656,8 @@ public class NetmodeSim {
                         pD = new PoissonDistribution(requestRatePerCell[i][j][app] / SAMPLING_INTERVAL);
                         tasksToCreate = pD.sample();
                         taskList[poi][app] = new ArrayList<>();
-                        System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.",
-                                tasksToCreate, poi, app, evt.getTime());
+                        // System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.",
+                        //         tasksToCreate, poi, app, evt.getTime());
                         taskList[poi][app] = (ArrayList<TaskSimple>) createTasks(tasksToCreate, poi, app, 0);
                         edgeBroker[poi].submitCloudletList(taskList[poi][app]);
                         loadBalancer[poi].balanceTasks(taskList[poi][app], app);
@@ -610,8 +669,8 @@ public class NetmodeSim {
 //                            }
 //                        }
                     } else {
-                        System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.", 0,
-                                poi, app, evt.getTime());
+                        // System.out.printf("%n#-----> Creating %d Task(s) at PoI %d, for App %d at time %.0f sec.", 0,
+                        //         poi, app, evt.getTime());
                     }
                 }
             }
