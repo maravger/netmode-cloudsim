@@ -7,18 +7,14 @@ import java.util.*;
 
 public class MRF {
 
-    // private static final double A = 1/1000.0;
-    // private static final double B = 10/1000.0;
-    // private static final double C = A;
-    private static final double B = 1/1000.0; // 50/1000.0
     private static final double A = 10/1000.0; // 1/1000.0
-    // private static final double B = 100/1000.0; // converges too fast
+    private static final double B = 1/1000.0; // 50/1000.0
     private static final double C = 5/2000.0; // 1/2000.0
-    private static final double D = 1/1000.0; // network delay weight
-    // private static final double D = 0; // network delay weight
+    // private static final double D = 1/1000.0; // network delay weight
+    private static final double D = 0; // network delay weight (it was 10/1000.0)
     private static final double L = 1;
     private static final double k = 5;
-    private static final double C0 = 2; // was = 2
+    private static final double C0 = 2;
     private static final int SWEEPS = 100;
     private static final int HOP_DELAY = 10; // in ms
     private static final double X0_PERC = 0.5;
@@ -30,10 +26,10 @@ public class MRF {
     private static int gridSize = 3; // for 3x3
     // private static int gridSize = 6;
     // private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1}; //for 3x3
-    private static int[] residualResources = {1, 1, 1, 1, 2, 2, 2, 1, 1}; //for 3x3, MRF scatter
-    // private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 0, 0, 1, 1, 1, 0, 2, 2, 2, 1, 1};
-    // private static int[][] residualWorkload = {{20, 20}, {0, 10}, {10, 5}, {5, 5}, {0, 0}, {10, 5}, {10, 10}, {10, 0}, {5, 10}}; // for 3x3
-    private static int[][] residualWorkload = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}}; // for 3x3
+    private static int[] residualResources = {1, 1, 1, 2, 2, 2, 2, 1, 1}; //for 3x3, MRF scatter
+    // private static int[] residualResources = {1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1, 0, 2, 2, 2, 1, 1, 0, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1};
+    private static int[][] residualWorkload = {{20, 20}, {0, 10}, {10, 5}, {5, 5}, {0, 0}, {10, 5}, {10, 10}, {10, 0}, {5, 10}}; // for 3x3
+    // private static int[][] residualWorkload = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}}; // for 3x3 MRF Scatter
     // private static int[][] residualWorkload = {{5, 10}, {0, 0}, {10, 5}, {0, 0}, {0, 0}, {10, 5}, {0, 0}, {10, 5}, {0, 0},
     //     {0, 0}, {5, 10}, {0, 0}, {10, 5}, {0, 0}, {10, 5}, {0, 0}, {0, 0}, {5, 10},
     //     {5, 10}, {0, 0}, {10, 5}, {0, 0}, {5, 5},{0, 0}, {10, 10}, {0, 0}, {5, 10},
@@ -68,6 +64,7 @@ public class MRF {
         System.out.println("--------------------------------------");
         System.out.println("Total Initial Workload: " + totalInitialWorkload + "\n");
         System.out.println("--------------------------------------");
+
         System.out.println("\nCurrent Energy Consumption: " + "\n");
         for (int i = 0; i < nodes.length; i++) {
             System.out.print(String.format("%5s",nodes[i].currentResourcesState.getPowerConsumption()));
@@ -77,6 +74,7 @@ public class MRF {
             else
                 System.out.print(" | ");
         }
+
         System.out.println("--------------------------------------");
         System.out.println("Total Initial Power Consumption: " + totalInitialPowerConsumption + "\n");
         System.out.println("--------------------------------------");
@@ -254,8 +252,14 @@ public class MRF {
             System.out.println("--------------------------------------");
             System.out.println("\nCurrent Energy Consumption: " + "\n");
             for (int i = 0; i < nodes.length; i++) {
-                System.out.print(String.format("%5s",nodes[i].currentResourcesState.getPowerConsumption()));
-                totalSweepPowerConsumption += nodes[i].currentResourcesState.getPowerConsumption();
+                int pwrConsumption = 0;
+                try {
+                    pwrConsumption = nodes[i].currentResourcesState.getPowerConsumption();
+                } catch (NullPointerException e) {
+                    pwrConsumption = 27000;
+                }
+                System.out.print(String.format("%5s", pwrConsumption));
+                totalSweepPowerConsumption += pwrConsumption;
                 if (i != 0 && (i + 1) % gridSize == 0)
                     System.out.println();
                 else
@@ -265,7 +269,11 @@ public class MRF {
             System.out.println("Total Sweep Power Consumption: " + totalSweepPowerConsumption);
             System.out.println("--------------------------------------");
             // Recalculate total Vcs array
-            totalVc = recalculateTotalVc();
+            try {
+                totalVc = recalculateTotalVc();
+            } catch (NullPointerException e) {
+                totalVc = new double[nodes.length];
+            }
             System.out.println("State Vcs: " + Arrays.toString(totalVc));
             System.out.println("Vc Sum: " + Arrays.stream(totalVc).sum());
             updateVcCSVs(sweep, Arrays.stream(totalVc).sum());
@@ -356,13 +364,34 @@ public class MRF {
         }
     }
 
+    private static void updateMdCSVs(double totalWorkload, int totalMigrationDelay) {
+        // MRF Evaluation: Migration Delay
+        // Initiate files if not present
+        String fileName = "migration_(" + timeStamp + ")MRF.csv";
+        File csvFile = new File(System.getProperty("user.dir") + "/evaluation_results/MRF/MigrationDelay/" + fileName);
+        StringBuilder sb = new StringBuilder();
+        if(!csvFile.isFile()) {
+            sb.append("Workload, TotalMigrationDelay\n");
+        }
+        try {
+            BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
+
+            sb.append(totalWorkload + "," + totalMigrationDelay + "\n");
+
+            br.write(sb.toString());
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private static MRFNode[] createMRFGrid(int gridSIze) {
         MRFNode[] nodes = new MRFNode[gridSIze * gridSIze];
         int id = 0;
 
         for (int i = 0; i < gridSIze; i++) {
             for (int j = 0; j < gridSIze; j++) {
-                nodes[id] = new MRFNode(id, new Coordinates(i,j), residualResources[id], residualWorkload[id]);
+                nodes[id] = new MRFNode(id, new Coordinates(i,j), residualResources[id], Arrays.copyOf(residualWorkload[id], residualWorkload[id].length));
                 id++;
             }
         }
@@ -406,7 +435,6 @@ public class MRF {
             if (i < nodes.length - gridSize) mainNode.addNeighbor(nodes[i+gridSize]);
         }
     }
-
 
     private static void createTemporaryNeighborhoods(MRFNode[] nodes, int hops) {
         for (int i = 0; i < nodes.length; i++) {
@@ -454,10 +482,72 @@ public class MRF {
         return (C0 / Math.log(1 + w));
     }
 
-    public static void promptEnterKey(){
+    public static void promptEnterKey() {
         System.out.println("Press \"ENTER\" to continue...");
         Scanner scanner = new Scanner(System.in);
         scanner.nextLine();
+    }
+
+    private static void calculateTotalMigrationDelay() {
+        int totalMigrationDelay = 0;
+        int app = 0;
+        int totalInitialWorkload = 0;
+        MRFNode[] finalFormation = nodes.clone();
+        for (int i = 0; i < finalFormation.length; i++) {
+            totalInitialWorkload += finalFormation[i].currentWorkload[0];
+        }
+        for (int o = 0; o < finalFormation.length; o++) {
+            // System.out.println("Initial Workload balance: " + "\n");
+            // System.out.println("Current Workload balance: " + "\n");
+            // for (int i = 0; i < finalFormation.length; i++) {
+            //     System.out.print(String.format("%8s", Arrays.toString(finalFormation[i].currentWorkload)));
+            //     if (i != 0 && (i + 1) % gridSize == 0)
+            //         System.out.println();
+            //     else
+            //         System.out.print(" | ");
+            // }
+            MRFNode checkingNode = finalFormation[o];
+            // System.out.println("Checking node in position: " + checkingNode.pos.x + "," + checkingNode.pos.y + " with workload: " + checkingNode.initialWorkload[app]);
+            for (int hops = 0; hops < 2 * gridSize - 1; hops++) { // Check if the condition for the hops is correct
+                if (checkingNode.initialWorkload[app] == 0) break;
+                for (int j = 0; j < finalFormation.length; j++) {
+                    if (checkingNode.initialWorkload[app] == 0) break;
+                    if (Math.abs(checkingNode.pos.x - finalFormation[j].pos.x) + Math.abs(checkingNode.pos.y - finalFormation[j].pos.y) == hops) {
+                        // System.out.println("Checking node in position: " + checkingNode.pos.x + "," + checkingNode.pos.y + " with workload: " + checkingNode.initialWorkload[app]);
+                        // System.out.println("Checking neighbor in position: " + finalFormation[j].pos.x + "," + finalFormation[j].pos.y + " with workload: " + finalFormation[j].currentWorkload[app]);
+                        if (checkingNode.initialWorkload[app] >= finalFormation[j].currentWorkload[app]) {
+                            checkingNode.initialWorkload[app] -= finalFormation[j].currentWorkload[app];
+                            totalMigrationDelay += finalFormation[j].currentWorkload[app] * hops * 10; //ms
+                            finalFormation[j].currentWorkload[app] = 0;
+                        }
+                        else {
+                            finalFormation[j].currentWorkload[app] -= checkingNode.initialWorkload[app];
+                            totalMigrationDelay += checkingNode.initialWorkload[app] * hops * 10; //ms
+                            checkingNode.initialWorkload[app] = 0;
+                        }
+                    }
+                }
+            }
+            // for (int i = 0; i < finalFormation.length; i++) {
+            //     System.out.print(String.format("%8s", Arrays.toString(finalFormation[i].initialWorkload)));
+            //     if (i != 0 && (i + 1) % gridSize == 0)
+            //         System.out.println();
+            //     else
+            //         System.out.print(" | ");
+            // }
+            // System.out.println("Current Workload balance: " + "\n");
+            // for (int i = 0; i < finalFormation.length; i++) {
+            //     System.out.print(String.format("%8s", Arrays.toString(finalFormation[i].currentWorkload)));
+            //     if (i != 0 && (i + 1) % gridSize == 0)
+            //         System.out.println();
+            //     else
+            //         System.out.print(" | ");
+            // }
+        }
+        System.out.println("---------------------------------------------");
+        System.out.println("Total Migration Delay: " + totalMigrationDelay);
+        System.out.println("---------------------------------------------");
+        updateMdCSVs(totalInitialWorkload, totalMigrationDelay);
     }
 
     public static void main(String[] args) {
@@ -466,13 +556,24 @@ public class MRF {
         MRFNode.formationsWorkload = formationsWorkload;
         MRFNode.relaxationFactor = RELAXATION_FACTOR;
 
-        timeStamp = String.valueOf(new Date());
-
-        for (int i = 0; i < 50; i++) {
-            nodes = createMRFGrid(gridSize);
-            balanceLoadBetweenPois(residualWorkload, residualResources);
-            residualWorkload[i % residualWorkload.length][0] = residualWorkload[i % residualWorkload.length][0] + 20;
-            System.out.println(Arrays.deepToString(residualWorkload));
+        for (int k = 0; k < 80; k++) {
+            timeStamp = String.valueOf(new Date());
+            residualWorkload = new int[residualWorkload.length][residualWorkload[0].length]; //uncomment
+            for (int i = 0; i < 38; i++) {
+                nodes = createMRFGrid(gridSize);
+                try {
+                    balanceLoadBetweenPois(residualWorkload, residualResources);
+                } catch (OutOfMemoryError e) {
+                continue;
+                }
+                residualWorkload[i % residualWorkload.length][0] = residualWorkload[i % residualWorkload.length][0] + 20; // uncomment
+                // for (int j = 0; j < residualWorkload.length; j++) {
+                    // Random rand = new Random();
+                    // residualWorkload[j][0] = residualWorkload[j][0] + 1;
+                // }
+                System.out.println("New residual workload: " + Arrays.deepToString(residualWorkload));
+                calculateTotalMigrationDelay();
+            }
         }
 
         MRFPlotter plotter = new MRFPlotter();

@@ -24,6 +24,7 @@ public final class CSVmachine implements SignalHandler{
     private int samplingInterval;
     private String timeStamp;
     private HashMap<String, double[]> predictionStats;
+    private HashMap<String, double[]> mrfStats;
 
     public CSVmachine (int pois, int apps, int samplingInterval) {
         this.pois = pois;
@@ -31,6 +32,7 @@ public final class CSVmachine implements SignalHandler{
         this.samplingInterval = samplingInterval;
         this.timeStamp = String.valueOf(new Date());
         this.predictionStats = new HashMap<>();
+        this.mrfStats = new HashMap<>();
     }
 
     public void listenTo(String signalName) {
@@ -55,7 +57,7 @@ public final class CSVmachine implements SignalHandler{
                                                    int[] poiAllocatedCores, int[] poiPowerConsumption,
                                                    int[][] allocatedUsers, int[][] allocatedCores, double[][] avgSinr,
                                                    double avgResidualEnergy, int[][] predictedUsers, int[][] intervalViolations,
-                                                   int[] optimalPowerConsumption) {
+                                                   int[] optimalPowerConsumption, double[][] residualWorkload) {
         // Print to console
         System.out.printf("%n%n------------------------- INTERVAL INFO --------------------------%n%n");
         System.out.printf(" POI | App | Admitted Tasks | Finished Tasks | Average Throughput | Average Response Time \n");
@@ -84,14 +86,16 @@ public final class CSVmachine implements SignalHandler{
 
         System.out.println("...Updating Interval App Performance CSVs");
         this.updateIntervalAppPerformanceCSVs(intervalNo, intervalAdmittedTasks, intervalFinishedTasks,
-                accumulatedResponseTime, allocatedUsers, allocatedCores, avgSinr, avgResidualEnergy);
+                accumulatedResponseTime, allocatedUsers, allocatedCores, avgSinr, avgResidualEnergy, residualWorkload);
 
         System.out.println("...Updating Interval Host Performance CSVs");
         this.updateIntervalPoiPerformanceCSVs(intervalNo, poiPowerConsumption, poiAllocatedCores, optimalPowerConsumption);
 
         System.out.println("...Updating Total Prediction CSVs");
         this.updateTotalPredictionCSVs(intervalPredictedTasks, intervalAdmittedTasks, accumulatedResponseTime,
-                intervalFinishedTasks, intervalViolations);
+                intervalFinishedTasks, intervalViolations, residualWorkload);
+
+        this.updateTotalPowerConsumptionCSVs(intervalNo, poiPowerConsumption, optimalPowerConsumption);
 
         System.out.println();
         System.out.println("\n------------------------------------------------------------------\n");
@@ -235,7 +239,7 @@ public final class CSVmachine implements SignalHandler{
 
     private void updateTotalPredictionCSVs(double[][] predictedWorkload, int[][] admittedTasks,
                                            double[][] accumulatedResponseTime, int[][] intervalFinishedTasks,
-                                           int[][] intervalViolations) {
+                                           int[][] intervalViolations, double[][] residualWorkload) {
 
         // Prediction Evaluation
         int toExclude = 0;
@@ -298,7 +302,8 @@ public final class CSVmachine implements SignalHandler{
         StringBuilder sb = new StringBuilder();
         if(!csvFile.isFile()) {
             // sb.append("Interval, Prediction_Error, Total_Violations, Average_Response_Time\n");
-            sb.append("Prediction_Error, Average_Response_Time, NoOfViolations, NoOf_Finished_Tasks, AccResponseTime\n");
+            sb.append("Prediction_Error, Average_Response_Time, NoOfViolations, NoOf_Finished_Tasks, AccResponseTime, " +
+                    "Residual Workload\n");
         }
         try {
             BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
@@ -309,14 +314,22 @@ public final class CSVmachine implements SignalHandler{
                     if ((acc[poi][app] != 0) && !Double.isNaN(art[poi][app]) && art[poi][app] < 20) {
                         // sb.append(intervalNo + "," + acc[poi][app] + "," + violations + "," + art[poi][app] + "\n");
                         sb.append(acc[poi][app] + "," + art[poi][app] + "," + intervalViolations[poi][app] + "," +
-                                intervalFinishedTasks[poi][app] + "," + accumulatedResponseTime[poi][app] + "\n");
+                                intervalFinishedTasks[poi][app] + "," + accumulatedResponseTime[poi][app] + ", " +
+                                residualWorkload[poi][app] + "\n");
                         DecimalFormat dc = new DecimalFormat("#.#");
                         dc.setRoundingMode(RoundingMode.FLOOR);
-                        String key = dc.format(acc[poi][app]);
+                        String key = dc.format(acc[poi][app]); // sort by prediction accuracy
                         if (!predictionStats.containsKey(key)) predictionStats.put(key, new double[3]);
                         predictionStats.get(key)[0] += accumulatedResponseTime[poi][app]; // accumulate response time
                         predictionStats.get(key)[1] += intervalFinishedTasks[poi][app]; // number of incidents
                         predictionStats.get(key)[2] += intervalViolations[poi][app]; //number of violations
+
+                        String key2 = String.valueOf(Math.round((int)residualWorkload[poi][app]/10.0) * 10); // sort by residual workload
+                        // System.out.println(key2);
+                        if (!mrfStats.containsKey(key2)) mrfStats.put(key2, new double[3]);
+                        mrfStats.get(key2)[0] += accumulatedResponseTime[poi][app]; // accumulate response time
+                        mrfStats.get(key2)[1] += intervalFinishedTasks[poi][app]; // number of incidents
+                        mrfStats.get(key2)[2] += intervalViolations[poi][app]; //number of violations
                     }
                 }
             }
@@ -332,7 +345,8 @@ public final class CSVmachine implements SignalHandler{
 
     private void updateIntervalAppPerformanceCSVs(int intervalNo, int[][] admittedTasks, int[][] finishedTasks,
                                                   double[][] accumulatedResponseTime, int[][] allocatedUsers,
-                                                  int[][] allocatedCores, double[][] avgSinr, double avgResidualEnergy) {
+                                                  int[][] allocatedCores, double[][] avgSinr, double avgResidualEnergy,
+                                                  double[][] residualWorkload) {
         // App Performance evaluation
         for (int poi = 0; poi < this.pois; poi++) {
             for (int app = 0; app < this.apps; app++) {
@@ -343,7 +357,7 @@ public final class CSVmachine implements SignalHandler{
                 if(!csvFile.isFile()) {
 //                    System.out.println("File does not exist!");
                     sb.append("Interval, Admitted, Finished, AvgThroughput, AvgResponseTime, AllocatedUsers, " +
-                            "AllocatedCores, AvgSINR, AvgResidualEnergy\n");
+                            "AllocatedCores, AvgSINR, AvgResidualEnergy, ResidualWorkload\n");
                 }
                 try {
                     BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
@@ -352,7 +366,8 @@ public final class CSVmachine implements SignalHandler{
                             String.format("%.2f", finishedTasks[poi][app] / (double) this.samplingInterval) + "," +
                             String.format("%.2f", accumulatedResponseTime[poi][app] / finishedTasks[poi][app]) + "," +
                             allocatedUsers[poi][app] + "," + allocatedCores[poi][app] + "," +
-                            String.format("%.2f", avgSinr[poi][app]) + "," + avgResidualEnergy + "\n");
+                            String.format("%.2f", avgSinr[poi][app]) + "," + avgResidualEnergy +
+                            String.format("%.2f", residualWorkload[poi][app]) + "," + "\n");
 
                     br.write(sb.toString());
                     br.close();
@@ -372,7 +387,7 @@ public final class CSVmachine implements SignalHandler{
             File csvFile = new File(System.getProperty("user.dir") + "/evaluation_results/PoiPerformance/" + fileName);
             StringBuilder sb = new StringBuilder();
             if(!csvFile.isFile()) {
-//                    System.out.println("File does not exist!");
+                // System.out.println("File does not exist!");
                 sb.append("Interval, PwrConsumption, OptimalPwrConsumption, AllocatedCores\n");
             }
             try {
@@ -385,6 +400,28 @@ public final class CSVmachine implements SignalHandler{
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    private void updateTotalPowerConsumptionCSVs(int intervalNo, int[] powerConsumption, int[] optimalPowerConsumption) {
+        double powerConsumptionAverage = Arrays.stream(powerConsumption).average().getAsDouble();
+        double optimalPowerConsumptionAverage = Arrays.stream(optimalPowerConsumption).average().getAsDouble();
+        String fileName = "TOTAL_PWR_CNSMPT(" + this.timeStamp + ")" + ".csv";
+        File csvFile = new File(System.getProperty("user.dir") + "/evaluation_results/PoiPerformance/" + fileName);
+        StringBuilder sb = new StringBuilder();
+        if(!csvFile.isFile()) {
+            // System.out.println("File does not exist!");
+            sb.append("Interval, AvgPwrConsumption, AvgOptimalPwrConsumption\n");
+        }
+        try {
+            BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
+
+            sb.append(intervalNo + "," + powerConsumptionAverage + "," + optimalPowerConsumptionAverage + "\n");
+
+            br.write(sb.toString());
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -413,8 +450,49 @@ public final class CSVmachine implements SignalHandler{
         }
     }
 
+    private void sumUpTotalMRF(){
+        mrfStats.entrySet().forEach(entry -> {
+            System.out.println(entry.getKey() + " -> " + Arrays.toString(entry.getValue()));
+        });
+
+        Map<String, double[]> sortedPredErrors = new TreeMap<>(mrfStats);
+
+        String fileName = "TOTAL(" + this.timeStamp + ").csv";
+        File csvFile = new File(System.getProperty("user.dir") + "/evaluation_results/MRF/" + fileName);
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n");
+        try {
+            BufferedWriter br = new BufferedWriter(new FileWriter(csvFile, true));
+            sortedPredErrors.entrySet().forEach(entry -> {
+                sb.append(entry.getKey() + "," + new DecimalFormat("#.##").format(entry.getValue()[0] /
+                        entry.getValue()[1]) + "," + new DecimalFormat("#.##").format(entry.getValue()[2] /
+                        entry.getValue()[1]) + "\n");
+            });
+            br.write(sb.toString());
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     public void archiveSimulationCSVs() {
         File[] folders = new File(System.getProperty("user.dir") + "/evaluation_results").listFiles();
+
+        for (File folder : folders) {
+            new File(folder.toPath().toString(), "Averages").mkdirs();
+            if (folder.isDirectory()) {
+                File[] files = folder.listFiles();
+                Arrays.sort(files);
+                File file = files[1];
+                try {
+                    Files.move(file.toPath(), Paths.get(folder.toPath().toString(), "Averages", file.getName()),
+                            StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
         for (File folder : folders) {
             // Create "Archived" directory if it doesn't exist
             new File(folder.toPath().toString(), "Archived").mkdirs();
@@ -449,6 +527,7 @@ public final class CSVmachine implements SignalHandler{
 
     public void plotCSVs() {
         sumUpTotalPredictions();
+        sumUpTotalMRF();
         Plotter plotter = new Plotter();
 //        plotter.doPlots();
     }

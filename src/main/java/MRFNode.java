@@ -41,7 +41,8 @@ public class MRFNode {
         for (int i = 0; i < noOfPossibleStates; i++) {
             this.states[i] = new MRFNodeState(i, nodePossibleResourcesStates.get(i), nodePossibleWorkloadStates.get(i),
                     nodePossiblePowerConsStates.get(i));
-//            System.out.println("State ID: " + this.states[i].id + ", Power Consumption: " + this.states[i].powerCons);
+           // System.out.println("State ID: " + this.states[i].id + ", Power Consumption: " + this.states[i].powerCons +
+           //         ", Workload: " + Arrays.toString(this.states[i].workload));
         }
 
         // parallel sort states from less to most energy consuming one
@@ -110,8 +111,8 @@ public class MRFNode {
             workloadStates.add(workloadState);
         }
 
-//        System.out.println("All possible Workload states for POI " + id + ": ");
-//        workloadStates.forEach(state -> System.out.println(Arrays.toString(state)));
+       // System.out.println("All possible Workload states for POI " + id + ": ");
+       // workloadStates.forEach(state -> System.out.println(Arrays.toString(state)));
 
         return workloadStates;
     }
@@ -154,12 +155,12 @@ public class MRFNode {
                 }
             }
             if (fits) {
-//                System.out.println("State with workload capacity : " + state.workload[0] + ", " + state.workload[1] + " fits");
-//                System.out.println("State Power Consumption : " + state.powerCons + "\n");
+                // System.out.println("State with workload capacity : " + state.workload[0] + ", " + state.workload[1] + " fits");
+                // System.out.println("State Power Consumption : " + state.powerCons + "\n");
                 return state;
             }
         }
-//        System.out.println("No state can satisfy given workload!\n");
+       // System.out.println("No state can satisfy given workload!\n");
         return null; // return zero resources state if workload cannot be satisfied // TODO reconsider
     }
 

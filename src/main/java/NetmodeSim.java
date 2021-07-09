@@ -33,7 +33,7 @@ public class NetmodeSim {
     // TODO: do not use constants directly in methods; add them to method call
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 360;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 3600;
     private static final double SCHEDULING_INTERVAL = 1;
     private static final int SAMPLING_INTERVAL = 30;
 
@@ -62,15 +62,16 @@ public class NetmodeSim {
     private static final double[][] VM_GUARANTEED_AVG_RR = {{11, 27, 59}, {37.35, 82.24, 172.68}}; // new ops
     private static final int VM_RAM = 4096;
     private static final int VM_BW = 200000;
-    // private static final double UNDERUTILISED_VM_CUTOFF = 0.5;
-    private static final double UNDERUTILISED_VM_CUTOFF = 0.0;
+    private static double UNDERUTILISED_VM_CUTOFF;
+    // private static final double UNDERUTILISED_VM_CUTOFF = 0.0;
 
     // Task related constants
     private static final int TASK_PES = 1;
     // private static final int TASK_LENGTH = {1000, 1000}; // old ops
     private static final int[] TASK_LENGTH = {3000, 1000};
     // private static final double[] APP_REQUEST_RATE_PER_USER = {3, 7}; // needed in order to make a sound translation // old ops
-    private static final double[] APP_REQUEST_RATE_PER_USER = {1, 7}; // needed in order to make a sound translation
+    // private static final double[] APP_REQUEST_RATE_PER_USER = {1, 7}; // needed in order to make a sound translation // good ops
+    private static final double[] APP_REQUEST_RATE_PER_USER = {1, 7}; // needed in order to make a sound translation // pwr cons
     private static final int[][] CELL_OFFLOADING_DISTANCE_INDEX = {{1, 1, 4}, {3, 1, 2}, {4, 4, 2}};
     private static final double VIOLATION_THRESHOLD = 4;
 
@@ -79,7 +80,7 @@ public class NetmodeSim {
     private int lastAccessed;
     private int maxVmSize;
     // private final CloudSim simulation = new CloudSim();
-    private final CloudSim simulation = new CloudSim(0.01);
+    private final CloudSim simulation;
     private DatacenterBrokerSimpleExtended[] edgeBroker;
     private ArrayList<Vm>[][] vmList;
     private ArrayList<TaskSimple>[][] taskList;
@@ -105,12 +106,24 @@ public class NetmodeSim {
     private double[][] avgSinr;
     private double avgResidualEnergy;
     private int[][] previousPredictedUsersPerCellPerApp;
+    double[][] residualWorkload;
 
     public static void main(String[] args) {
-        new NetmodeSim();
+        UNDERUTILISED_VM_CUTOFF = 0.5;
+        for (int i = 0; i < 100; i++) {
+            try {
+                Group.TTL = 9;
+                Group.DATASET_INDEX = 0;
+                new NetmodeSim();
+            } catch (OutOfMemoryError e) {
+                continue;
+            }
+            // if (i > 50) UNDERUTILISED_VM_CUTOFF = i/100;
+        }
     }
 
     public NetmodeSim() {
+        simulation = new CloudSim(0.01);
         csvm = new CSVmachine(POI, APPS, SAMPLING_INTERVAL);
 
         // Archive previous Simulation results
@@ -130,6 +143,7 @@ public class NetmodeSim {
         allocatedUsers = new int[POI][APPS];
         allocatedCores = new int[POI][APPS];
         avgSinr = new double[POI][APPS];
+        residualWorkload = new double[POI][APPS];
 
         simData = csvm.readSimCSVData();
         firstEvent = true;
@@ -206,7 +220,8 @@ public class NetmodeSim {
                     csvm.formatPrintAndArchiveIntervalStats(((int) evt.getTime()) / SAMPLING_INTERVAL,
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
-                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations, optimalPowerConsumption);
+                            avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations, optimalPowerConsumption,
+                            residualWorkload);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -225,7 +240,7 @@ public class NetmodeSim {
                     // actually allocate VMs and perform MRF
                     ArrayList<Integer>[] vmPlacement =
                             optimizeVmPlacement(EDGE_HOSTS, nextIntervalPredictedTasks, EDGE_HOST_PES, UNDERUTILISED_VM_CUTOFF);
-                    double[][] residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, nextIntervalPredictedTasks);
+                    residualWorkload = calculateResidualWorkload(vmPlacement, guaranteedWorkload, nextIntervalPredictedTasks);
                     int[] residualResources = calculateResidualResources(vmPlacement, EDGE_HOSTS);
 
                     // MRF.promptEnterKey();
@@ -383,11 +398,20 @@ public class NetmodeSim {
             ArrayList<Integer> site = new ArrayList<>(tempSite);
             for (int server : tempSite) {
                 int serverCoreSum = 0;
-                for (int app = 0; app < APPS; app++)
+                for (int app = 0; app < APPS; app++) {
                     serverCoreSum += IntStream.of(feasibleFormations.get(server)[app]).sum();
-//                System.out.println(serverCoreSum);
+                }
+                // System.out.println(serverCoreSum);
                 // throws java.util.ConcurrentModificationException if modifying the iterated array. Thus use tempSite
-                if ((serverCoreSum / (double) edgeHostPes) <= cutOffPoint) site.remove(server);
+                if ((serverCoreSum / (double) edgeHostPes) <= cutOffPoint) {
+                    site.remove(server);
+                    // System.out.println("Removing Server with " + Arrays.toString(feasibleFormations.get(server)[app]) + "cores.");
+                    // double excessWorkload = 0;
+                    // for (int flavor : feasibleFormations.get(server)[0]) { // only for app1
+                    //     excessWorkload += VM_GUARANTEED_AVG_RR[0][ArrayUtils.indexOf(VM_PES[0], flavor)];
+                    // }
+                    // System.out.println("Removing Server with " + excessWorkload + " excess workload for App1.");
+                }
             }
             vmPlacement[poi] = site;
             poi++;
@@ -462,6 +486,7 @@ public class NetmodeSim {
             }
         }
 
+        System.out.println("--- real Workload: \n" + Arrays.deepToString(realWorkload));
         System.out.println("--- optimal VM Placement: \n" + Arrays.deepToString(vmPlacement));
         System.out.println("--- optimal POIs' Power Consumption (in W): \n" + Arrays.toString(optimalPowerConsumption));
 

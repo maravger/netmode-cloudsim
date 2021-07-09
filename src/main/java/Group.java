@@ -26,8 +26,10 @@ public class Group {
     private Integer[][] mobData;
 
     private static final boolean USE_REAL_DATASET = true;
+    private static final boolean USE_RANDOM_MOVEMENT = false;
     private static final String REAL_DATASET_FILE = "/Users/avgr_m/Downloads/mobility_dataset.csv";
-    private static final int TTL = 9; // time to live
+    public static int TTL = 9; // time to live
+    public static int DATASET_INDEX = 0;
 
     public Group(int id, int size, int app, Coordinates currPos, int gridSize, int nmmcHistory) {
         this.howManyVisited = 1;
@@ -43,12 +45,24 @@ public class Group {
 
         if (USE_REAL_DATASET) {
             mobData = readMobCSVData();
-            Random rand = new Random();
 
-            int userID = rand.nextInt(mobData.length);
+            int userID;
+            if (USE_RANDOM_MOVEMENT) {
+                Random rand = new Random();
+                userID = rand.nextInt(mobData.length);
+            }
+            else {
+                userID = DATASET_INDEX;
+                DATASET_INDEX++;
+                this.size = 2;
+                this.real_size = 2;
+                this.app = DATASET_INDEX % 2;
+                this.currPos = new Coordinates(DATASET_INDEX % gridSize, DATASET_INDEX % gridSize);
+                if (DATASET_INDEX == mobData.length) DATASET_INDEX = 0;
+            }
             this.assignedUserSequence = mobData[userID];
             this.move = 1;
-            // System.out.println("Assigned User Sequence: " + Arrays.toString(this.assignedUserSequence));
+            System.out.println("Assigned User Sequence: " + Arrays.toString(this.assignedUserSequence));
 
             int tile = ArrayUtils.indexOf(this.assignedUserSequence, this.move);
             if (tile == -1) {
@@ -66,8 +80,16 @@ public class Group {
         if (USE_REAL_DATASET) {
             if (this.move == TTL) { // assign a new user
                 // System.out.println("Group reached end of life. Assigning new user.");
-                Random rand = new Random();
-                int userID = rand.nextInt(mobData.length);
+                int userID;
+                if (USE_RANDOM_MOVEMENT) {
+                    Random rand = new Random();
+                    userID = rand.nextInt(mobData.length);
+                }
+                else {
+                    userID = DATASET_INDEX;
+                    DATASET_INDEX++;
+                    if (DATASET_INDEX == mobData.length) DATASET_INDEX = 0;
+                }
                 this.assignedUserSequence = mobData[userID];
                 // System.out.println("Assigned User Sequence: " + Arrays.toString(this.assignedUserSequence));
                 this.move = 0;

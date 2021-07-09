@@ -25,7 +25,7 @@ import java.util.*;
 public class FcmSim {
 
     // Simulation related constants
-    private static final double TIME_TO_TERMINATE_SIMULATION = 3600;
+    private static final double TIME_TO_TERMINATE_SIMULATION = 30000;
     private static final int POI = 1;
     private static final int APPS = 1;
     private static final int SAMPLING_INTERVAL = 30;
@@ -69,6 +69,7 @@ public class FcmSim {
     private int [][] taskCounter;
     private User[] assignedUsers;
     private double avgResidualEnergy;
+    private double[][] residualWorkload;
     private int[][] previousPredictedUsersPerCellPerApp;
 
     private final CloudSim simulation = new CloudSim();
@@ -136,7 +137,7 @@ public class FcmSim {
                             intervalPredictedTasks, intervalFinishedTasks, intervalAdmittedTasks, accumulatedResponseTime,
                             accumulatedCpuUtil, poiAllocatedCores, poiPowerConsumption, allocatedUsers, allocatedCores,
                             avgSinr, avgResidualEnergy, previousPredictedUsersPerCellPerApp, intervalViolations,
-                            optimalPowerConsumption);
+                            optimalPowerConsumption, residualWorkload);
 
                     // Initiate interval variables
                     accumulatedCpuUtil = new HashMap<>();
@@ -144,13 +145,13 @@ public class FcmSim {
                 }
 
                 // Spawn VMs realizing random decisions
-                int randomFlavor = new Random().nextInt(3);
+                int randomFlavor = new Random().nextInt(2) + 1 ;
                 vmList[0][0] = createVms(1, 0, randomFlavor);
                 edgeBroker[0].submitVmList(vmList[0][0]);
                 correctlySetVmDescriptions(vmList[0][0]);
 
                 // Change request rate based on the users
-                assignedUsers = createAssignedUsers(2, 10, 50, 70);
+                assignedUsers = createAssignedUsers(7, 10, 50, 70);
                 requestRatePerCell = new double[][][]{{{createRequestRate(assignedUsers)}}};
 
                 // First interval arrangements are now over
@@ -260,6 +261,7 @@ public class FcmSim {
             CloudletSchedulerTimeSharedExtended cloudletScheduler = new CloudletSchedulerTimeSharedExtended();
             final Vm vm = new VmSimple(vm_pe_mips, vm_pes);
             allocatedCores[0][0] = vm_pes;
+            System.out.println("Allocated cores: " + allocatedCores[0][0]);
             vm.setRam(vm_ram).setBw(vm_bw).setSize(1000);
             vm.setCloudletScheduler(cloudletScheduler); // TODO: not sure if suppressing is better or real issue exists
             list.add(vm);
